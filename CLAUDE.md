@@ -100,10 +100,10 @@ reciente arriba). Antes de proponer estrategias o estudios nuevos, léelo.
   precio real al cual operar: el backtest no debe llenar órdenes ahí como si hubiera liquidez.
 - **Pares reservados para validación** (`simbolos_validacion` en `config.toml`, solo en 1h): se
   descargan con todo lo demás, pero barrido, walk-forward y eventos no los usan por defecto.
-  Sirven para confirmar hipótesis registradas de antemano en `docs/RESULTADOS.md`. **Todos están
-  gastados**: SOL, BNB y XRP (H1, H2b y H3) y ADA, LTC y LINK (H4). Para una hipótesis nueva hay
-  que reservar pares nuevos ANTES de explorar, por ejemplo DOGE, AVAX o DOT (verificar que
-  existan desde 2020).
+  Sirven para confirmar hipótesis registradas de antemano en `docs/RESULTADOS.md`. Gastados:
+  SOL, BNB y XRP (H1, H2b y H3) y ADA, LTC y LINK (H4). **Limpios: ATOM, ETC y XLM**, reservados
+  para los mercados laterales y no usados porque nada pasó la exploración. Para la siguiente
+  hipótesis que lo merezca, usar esos; después, reservar nuevos ANTES de explorar.
 - **Factores** (fase 6, comando `factores`):
   - funding de los futuros perpetuos USDT-M de Binance, cada 8 h, desde 2020 en los 6 pares;
   - métricas de futuros cada 5 minutos (interés abierto y proporciones de largos y cortos) desde
@@ -208,7 +208,8 @@ tradinglab/
     datos.py                carga de una serie desde SQLite
     estrategias.py          catálogo con sus rejillas: cruce_medias, ruptura, rsi, momentum;
                             con factores: momentum_apalancamiento, momentum_sentimiento;
-                            de riesgo: tendencia_larga, volatilidad_objetivo, tendencia_volatilidad
+                            de riesgo: tendencia_larga, volatilidad_objetivo, tendencia_volatilidad;
+                            de laterales y rebotes: rsi_lateral, rebote_caida
     motor.py                simulación, métricas y las dos referencias
   validacion/               fase 3
     ventanas.py             ventanas de calendario y pliegues de walk-forward
@@ -226,7 +227,8 @@ tradinglab/
     tabla.py                factores alineados con cada vela, sin ver el futuro
     eventos.py              estudio de eventos: ¿qué factor avisa antes de las caídas?
 tests/                      pytest, sin red (fabrica.py simula a Binance)
-analisis/                   exploraciones sueltas y reproducibles (adelanto.py: ¿un mercado se adelanta a otro?)
+analisis/                   exploraciones sueltas y reproducibles: adelanto.py (¿un mercado se adelanta
+                            a otro?), lateral.py (¿hay rebote en los mercados laterales?)
 docs/                       HISTORIAL.md, RESULTADOS.md, PLAN_FASE1.md
 datos/tradinglab.sqlite     la base (ignorada por git)
 datos/externos/             series externas (FRED: S&P 500, Nasdaq, dólar), ignoradas por git

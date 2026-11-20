@@ -271,3 +271,14 @@ def test_estrategias_de_riesgo():
     combinada = estrategias.obtener("tendencia_volatilidad").objetivo(
         serie.velas, {"ventana_tendencia": 100, "ventana_vol": 168, "vol_objetivo": 0.2})
     assert np.all(combinada[tendencia == 0] == 0)  # fuera de tendencia, nada invertido
+
+
+def test_rebote_caida_compra_tras_la_caida_y_mantiene():
+    # 30 velas planas, una caída de 10% en la vela 30 y luego plano otra vez.
+    cierres = [100.0] * 30 + [90.0] * 40
+    serie = serie_backtest(cierres, cierres)
+    objetivo = estrategias.obtener("rebote_caida").objetivo(serie.velas, {"caida": 0.08, "mantener": 5})
+    # La caída de 24 h se ve desde la vela 30 hasta la 53 (mientras el precio de hace 24 h era 100);
+    # el plazo se extiende 5 velas más allá del último disparo.
+    assert objetivo[29] == 0 and objetivo[30] == 1
+    assert objetivo[53] == 1 and objetivo[57] == 1 and objetivo[58] == 0

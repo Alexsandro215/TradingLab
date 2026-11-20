@@ -181,6 +181,31 @@ def _tendencia_volatilidad(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
     return en_tendencia * _peso_por_volatilidad(v, p["ventana_vol"], p["vol_objetivo"])
 
 
+def _eficiencia(cierre: pd.Series, ventana: int) -> pd.Series:
+    """Índice de eficiencia de Kaufman: avance neto / recorrido total. ~0 = lateral; ~1 = tendencia."""
+    return (cierre - cierre.shift(ventana)).abs() / cierre.diff().abs().rolling(ventana).sum()
+
+
+def _rsi_lateral(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
+    """Reversión con RSI solo en mercado lateral; si empieza una tendencia, sale."""
+    cambio = v["cierre"].diff()
+    alfa = 1 / p["periodo"]
+    sube = cambio.clip(lower=0).ewm(alpha=alfa, adjust=False, min_periods=p["periodo"]).mean()
+    baja = (-cambio.clip(upper=0)).ewm(alpha=alfa, adjust=False, min_periods=p["periodo"]).mean()
+    rsi = 100 - 100 / (1 + sube / baja)
+    lateral = _eficiencia(v["cierre"], 72) < p["umbral"]
+    return _mantener_estado((rsi < 30) & lateral, (rsi > 70) | ~lateral)
+
+
+def _rebote_caida(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
+    """Compra al cierre de una vela que deja una caída de 24 h peor que `caida` y mantiene
+    `mantener` velas (si hay otra caída mientras tanto, el plazo se extiende)."""
+    cierre = v["cierre"]
+    velas_24h = max(1, round(86_400_000 / float(np.median(np.diff(v["ts"].to_numpy()[:1000])))))
+    disparo = (cierre / cierre.shift(velas_24h) - 1 <= -p["caida"]).astype(float)
+    return disparo.rolling(p["mantener"], min_periods=1).max()
+
+
 def _momentum_sentimiento(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
     cierre = v["cierre"]
     sube = cierre > cierre.shift(p["ventana"])
@@ -263,6 +288,33 @@ ESTRATEGIAS: dict[str, Estrategia] = {
             ),
             calcular=_momentum_sentimiento,
             factores=("miedo_codicia",),
+        ),
+        Estrategia(
+            nombre="rsi_lateral",
+            titulo="RSI solo en mercado lateral",
+            descripcion=(
+                "Compra con RSI < 30 y vende con RSI > 70, pero solo cuando el mercado va de lado "
+                "(índice de eficiencia de 72 velas bajo el umbral). Si empieza una tendencia, sale."
+            ),
+            parametros=(
+                Parametro("periodo", int, 14, "velas del RSI", (7, 14)),
+                Parametro("umbral", float, 0.25, "eficiencia bajo la cual el mercado es lateral (0 a 1)",
+                          (0.15, 0.25, 0.35)),
+            ),
+            calcular=_rsi_lateral,
+        ),
+        Estrategia(
+            nombre="rebote_caida",
+            titulo="Rebote tras caída brusca",
+            descripcion=(
+                "Compra cuando el precio cayó más de cierto porcentaje en 24 h y mantiene un número fijo "
+                "de velas. Sale de analisis/lateral.py: tras caídas bruscas hubo rebote en los 9 pares explorados."
+            ),
+            parametros=(
+                Parametro("caida", float, 0.08, "caída en 24 h que dispara la compra (0.08 = 8%)", (0.05, 0.08, 0.12)),
+                Parametro("mantener", int, 24, "velas que se mantiene la posición", (24, 48)),
+            ),
+            calcular=_rebote_caida,
         ),
         Estrategia(
             nombre="tendencia_larga",

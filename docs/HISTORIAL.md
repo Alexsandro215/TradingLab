@@ -6,6 +6,38 @@ hizo* y *Pendiente*.
 
 ---
 
+## 2026-11-20: Mercados laterales
+
+### Decisiones
+
+- Se reservaron ATOMUSDT, ETCUSDT y XLMUSDT (1h) ANTES de explorar. No se usaron porque nada pasó
+  la exploración, así que siguen limpios para la próxima hipótesis que lo merezca.
+- "Lateral" = índice de eficiencia de Kaufman en 72 velas (avance neto / recorrido total) bajo un
+  umbral.
+
+### Lo que se hizo
+
+- `analisis/lateral.py`: ¿hay más rebote en los laterales que en la tendencia?
+- Estrategias `rsi_lateral` (RSI solo en laterales) y `rebote_caida` (comprar tras caída brusca
+  y mantener 24 o 48 h), con pruebas. Son 96 pruebas, todas pasan.
+- Walk-forward en los 9 pares ya usados: estudios #21 (`rebote_caida`) y #22 (`rsi_lateral`
+  contra `rsi`).
+
+### Hallazgos
+
+- **En los laterales no hay rebote** (correlación ~0). El rebote aparece tras caídas bruscas y
+  directas (−0.07 en entrenamiento y en prueba).
+- `rsi_lateral` pierde dinero en los 9 pares y empeora al RSI normal en 7 de 9.
+- `rebote_caida` le gana a no operar en 7 de 9, pero solo cumple el criterio (ganar y mejor
+  Calmar que comprar y mantener) en 2 de 9. Depende de la dirección del mercado.
+
+### Pendiente
+
+- Nada de esta línea merece confirmación por ahora. Las ideas abiertas siguen igual: noticias
+  hacia adelante, velas diarias para la línea de riesgo y la sesión de papel de ETH.
+
+---
+
 ## 2026-11-20: ¿Un mercado se adelanta a otro?
 
 ### Decisiones

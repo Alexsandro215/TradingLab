@@ -5,6 +5,55 @@ muestra completos; el panel también). Lo más reciente va arriba.
 
 ---
 
+## 2026-11-20: Mercados laterales (`analisis/lateral.py`, estudios #21 y #22)
+
+Pregunta del usuario: ¿funciona operar los rebotes solo cuando el mercado va de lado?
+
+Antes de explorar se reservaron **ATOMUSDT, ETCUSDT y XLMUSDT** (1h) para confirmar lo que
+saliera. Al final no se usaron, porque nada pasó la exploración. **Siguen limpios.**
+
+### 1. ¿En los laterales hay más rebote? No; el rebote aparece tras movimientos bruscos
+
+Lateral = índice de eficiencia de Kaufman en 72 h (avance neto / recorrido total) en el quintil
+más bajo. Se midió la correlación entre las 24 h anteriores y las 24 h siguientes en 9 pares
+(BTC, ETH, ZEC, SOL, BNB, XRP, ADA, LTC y LINK). Negativo = rebote.
+
+| Quintil de eficiencia | Entrenamiento | Prueba |
+|---|---|---|
+| 1 (más lateral) | +0.002 | −0.002 |
+| 3 | −0.022 | −0.013 |
+| 5 (más tendencia) | **−0.076** | **−0.064** |
+
+- **En los laterales no hay rebote**: lo de las últimas 24 h no dice nada de las siguientes.
+- El rebote está en el otro extremo. Tras una caída fuerte y directa (el 10% peor de 24 h, con
+  eficiencia alta), en las 24 h siguientes el precio subió en promedio de +0.14% a +2.1%, en los 9
+  pares y en los dos periodos.
+
+### 2. RSI solo en laterales (`rsi_lateral`, estudio #22): pierde en los 9 pares
+
+Walk-forward de 12/3 meses, criterio `calmar`, contra el RSI normal:
+- `rsi_lateral` pierde dinero en **9 de 9 pares** (−10% a −93%) y queda peor que el RSI normal
+  en 7 de 9.
+- Hace muchas operaciones (260 a 400) y desde el entrenamiento prometía casi nada (de 0% a +3%
+  al mes).
+
+### 3. La idea derivada: comprar tras una caída brusca (`rebote_caida`, estudio #21)
+
+Compra si el precio cayó más de 5%, 8% o 12% en 24 h y mantiene 24 o 48 h.
+- Le gana a no operar en 7 de 9 pares, pero el criterio de siempre (ganar **y** tener mejor
+  Calmar que comprar y mantener) solo se cumple en **2 de 9** (ADA y LINK).
+- Solo supera a comprar y mantener en los pares donde comprar y mantener perdió (ADA, LTC y LINK):
+  depende de la dirección del mercado más que de una ventaja propia.
+- Como no pasó la exploración, **no se gastaron los pares reservados** en confirmarla.
+
+### Conclusión
+
+Los mercados laterales de cripto no rebotan de forma aprovechable en 1h: operar solo en ellos
+empeora el RSI. Hay algo de rebote tras caídas bruscas, pero no alcanza para una estrategia que
+supere el criterio.
+
+---
+
 ## 2026-11-20: ¿Un mercado se adelanta a otro? (`analisis/adelanto.py`)
 
 Pregunta del usuario: ¿hay evidencia de que un mercado se mueve con base en otro, o al revés? Es
