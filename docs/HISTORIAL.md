@@ -6,6 +6,34 @@ hizo* y *Pendiente*.
 
 ---
 
+## 2026-11-20: ¿Un mercado se adelanta a otro?
+
+### Decisiones
+
+- Stooq bloquea las descargas automáticas con una verificación para navegadores, y no se intentó
+  saltarla. La bolsa y el dólar se bajan de FRED (público y sin llaves). El oro se representa
+  con PAXGUSDT de Binance, que se descargó en 1h fuera de `config.toml`.
+- Fue una exploración, sin hipótesis registrada: no salió nada que valiera la pena confirmar.
+
+### Lo que se hizo
+
+- `analisis/adelanto.py`: correlaciones en el mismo periodo y con un periodo de adelanto, en las
+  dos direcciones, en entrenamiento y en prueba, y el movimiento promedio tras golpes fuertes.
+  Abarca criptos en 1h y 5m, oro, bolsa y dólar en diario. Resultados en `docs/RESULTADOS.md`.
+
+### Hallazgos
+
+- Se mueven juntas (las criptos entre sí; con la bolsa desde 2024; al revés con el dólar), pero
+  **ninguno se adelanta de forma aprovechable**. Los efectos tras golpes fuertes son de 0.01% a
+  0.2%, por debajo del costo de ~0.30% por operación.
+
+### Pendiente
+
+- Si se quiere, probar el régimen lateral por separado (detectar rango y operar solo ahí), con
+  hipótesis registrada y pares reservados nuevos.
+
+---
+
 ## 2026-11-20: Nueva meta, gestión de riesgo (posiciones parciales y H4)
 
 ### Decisiones

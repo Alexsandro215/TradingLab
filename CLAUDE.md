@@ -226,8 +226,10 @@ tradinglab/
     tabla.py                factores alineados con cada vela, sin ver el futuro
     eventos.py              estudio de eventos: ¿qué factor avisa antes de las caídas?
 tests/                      pytest, sin red (fabrica.py simula a Binance)
+analisis/                   exploraciones sueltas y reproducibles (adelanto.py: ¿un mercado se adelanta a otro?)
 docs/                       HISTORIAL.md, RESULTADOS.md, PLAN_FASE1.md
 datos/tradinglab.sqlite     la base (ignorada por git)
+datos/externos/             series externas (FRED: S&P 500, Nasdaq, dólar), ignoradas por git
 ```
 
 Tablas de la base (esquema v3, en `PRAGMA user_version`):

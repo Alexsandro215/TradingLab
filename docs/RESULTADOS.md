@@ -5,6 +5,37 @@ muestra completos; el panel también). Lo más reciente va arriba.
 
 ---
 
+## 2026-11-20: ¿Un mercado se adelanta a otro? (`analisis/adelanto.py`)
+
+Pregunta del usuario: ¿hay evidencia de que un mercado se mueve con base en otro, o al revés? Es
+una exploración; no hubo hipótesis registrada porque no salió nada que valga la pena confirmar.
+
+Para cada par de mercados se midió, en entrenamiento (2020-2023) y en prueba (2024 a hoy):
+- si se mueven juntos en el mismo periodo (correlación);
+- si uno se adelanta: el movimiento de A en un periodo contra el de B en el siguiente, y al revés;
+- cuánto se mueve B, en promedio, después de los movimientos fuertes de A (el 5% o 10% más
+  extremo), comparado con el costo de una operación de ida y vuelta (~0.30%).
+
+| Mercados | ¿Se mueven juntos? | ¿Uno se adelanta? | Movimiento de B tras un golpe fuerte de A |
+|---|---|---|---|
+| BTC y 8 criptos, 1h | **sí**: 0.6 a 0.85 | no: de −0.04 a +0.01 | +0.03% a +0.18%: muy por debajo del costo |
+| BTC, ETH y ZEC, 5m | sí: 0.5 a 0.85 | no: ~0 en prueba | ~0.01% |
+| BTC y oro (PAXG), 1h | apenas: 0.12 a 0.18 | no: −0.08 → −0.03 | ~0.03% |
+| S&P 500 y Nasdaq contra BTC/ETH, diario | **sí**: 0.37 a 0.48, más desde 2024 | no: de −0.06 a +0.02, dentro del azar (±0.074) | sin signo estable entre periodos |
+| Dólar (índice amplio) contra BTC/ETH, diario | al revés: −0.12 a −0.22 | casi nada | tras dólar muy fuerte, BTC +0.72% al día siguiente en entrenamiento, pero +0.25% en prueba: menos que el costo |
+
+Lectura:
+- Las criptos se mueven **juntas** con BTC y, desde 2024, bastante con la bolsa de EE. UU. Pero
+  ninguna **se adelanta** de forma aprovechable con velas de 5 minutos, de 1 hora o diarias.
+- Si hay adelanto entre criptos, dura segundos y se lo llevan los robots de alta velocidad, que
+  pagan comisiones mucho menores. Con 0.1% de comisión por lado no se alcanza.
+- Que se muevan juntas sirve para el riesgo, no para predecir: tener varias criptos casi no
+  diversifica, porque caen juntas.
+- No se probó el régimen de mercado lateral por separado (operar solo cuando el precio va de
+  lado). La estrategia típica para eso, la reversión con RSI, falló en general (estudios #9 y #10).
+
+---
+
 ## 2026-11-20: Nueva meta, gestión de riesgo. Hipótesis H4
 
 Como nada le gana a comprar y mantener en rendimiento, el usuario aceptó cambiar la meta:
