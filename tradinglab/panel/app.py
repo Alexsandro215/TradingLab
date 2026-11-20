@@ -14,7 +14,7 @@ from typing import Any
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from tradinglab import db
@@ -63,7 +63,7 @@ def _fecha(texto: str | None) -> int | None:
 
 def crear_app(config: Config) -> FastAPI:
     app = FastAPI(title="TradingLab", docs_url="/api/docs", redoc_url=None)
-    cache: dict[tuple[str, str], tuple[int, Serie]] = {}
+    cache: dict[tuple[str, str, bool], tuple[int, Serie]] = {}
     candado = threading.Lock()
 
     def conexion() -> sqlite3.Connection:
@@ -71,7 +71,7 @@ def crear_app(config: Config) -> FastAPI:
             raise HTTPException(503, "No existe la base. Corre primero: python -m tradinglab descargar")
         return db.conectar_lectura(config.ruta_base)
 
-    def serie_de(simbolo: str, intervalo: str) -> Serie:
+    def serie_de(simbolo: str, intervalo: str, con_factores: bool = False) -> Serie:
         """Carga la serie, con caché mientras no lleguen velas nuevas."""
         con = conexion()
         try:
@@ -79,19 +79,34 @@ def crear_app(config: Config) -> FastAPI:
             if ultima is None:
                 raise HTTPException(404, f"No hay velas de {simbolo} {intervalo}")
             with candado:
-                guardada = cache.get((simbolo, intervalo))
+                guardada = cache.get((simbolo, intervalo, con_factores))
             if guardada and guardada[0] == ultima:
                 return guardada[1]
-            serie = cargar_serie(con, simbolo, intervalo)
+            serie = cargar_serie(con, simbolo, intervalo, con_factores)
             with candado:
-                cache[(simbolo, intervalo)] = (ultima, serie)
+                cache[(simbolo, intervalo, con_factores)] = (ultima, serie)
             return serie
         finally:
             con.close()
 
+    @app.middleware("http")
+    async def revalidar_archivos(request, call_next):  # type: ignore[no-untyped-def]
+        """Que el navegador siempre pregunte si la página cambió (si no, tras una actualización
+        sigue usando el app.js viejo). Si no cambió, el servidor responde 304 y no se baja de nuevo."""
+        respuesta = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            respuesta.headers["Cache-Control"] = "no-cache"
+        return respuesta
+
     @app.get("/", include_in_schema=False)
-    def inicio() -> FileResponse:
-        return FileResponse(ESTATICOS / "index.html")
+    def inicio() -> HTMLResponse:
+        # Los archivos se piden con su fecha de modificación (?v=...): si cambian, el navegador
+        # baja el nuevo en vez de usar el que tenía guardado.
+        html = (ESTATICOS / "index.html").read_text(encoding="utf-8")
+        for archivo in ("app.js", "estilo.css"):
+            version = int((ESTATICOS / archivo).stat().st_mtime)
+            html = html.replace(f"/static/{archivo}", f"/static/{archivo}?v={version}")
+        return HTMLResponse(html)
 
     app.mount("/static", StaticFiles(directory=ESTATICOS), name="static")
 
@@ -153,7 +168,7 @@ def crear_app(config: Config) -> FastAPI:
         except (ValueError, json.JSONDecodeError) as error:
             raise HTTPException(400, str(error)) from None
         capital = config.costos.capital_inicial if capital is None else capital
-        serie = serie_de(simbolo, intervalo)
+        serie = serie_de(simbolo, intervalo, bool(e.factores))
         inicio, fin = serie.rango(_fecha(desde), _fecha(hasta))
         if fin - inicio < 2:
             raise HTTPException(400, "La ventana tiene menos de 2 velas")

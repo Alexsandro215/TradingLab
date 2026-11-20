@@ -42,6 +42,7 @@ class ClienteBinance:
         dormir: Callable[[float], None] = time.sleep,
         reloj: Callable[[], float] = time.monotonic,
         reloj_pared: Callable[[], float] = time.time,
+        limite_peso: int = LIMITE_PESO_MINUTO,
     ) -> None:
         if not urls:
             raise ValueError("Se necesita al menos una URL de Binance")
@@ -56,6 +57,8 @@ class ClienteBinance:
         self._reloj_pared = reloj_pared
         self._ultima_peticion: float | None = None
         self.peticiones = 0
+        # Spot permite 6000 de peso por minuto; futuros (fapi), 2400.
+        self.limite_peso = limite_peso
 
     @property
     def url_actual(self) -> str:
@@ -84,6 +87,10 @@ class ClienteBinance:
             "limit": limite,
         }
         return self._get("/api/v3/klines", parametros)
+
+    def get(self, ruta: str, parametros: dict[str, Any] | None = None) -> Any:
+        """GET a cualquier endpoint público, con los mismos reintentos y límites."""
+        return self._get(ruta, parametros)
 
     # --- interno ---------------------------------------------------------------------
 
@@ -159,9 +166,9 @@ class ClienteBinance:
 
     def _controlar_peso(self, respuesta: requests.Response) -> None:
         usado = _segundos(respuesta.headers.get("X-MBX-USED-WEIGHT-1M"), por_defecto=0.0)
-        if usado >= LIMITE_PESO_MINUTO * FRACCION_PESO_MAXIMA:
+        if usado >= self.limite_peso * FRACCION_PESO_MAXIMA:
             espera = 61.0 - self._reloj_pared() % 60
-            log.warning("Peso usado %.0f de %d en este minuto; esperando %.0f s", usado, LIMITE_PESO_MINUTO, espera)
+            log.warning("Peso usado %.0f de %d en este minuto; esperando %.0f s", usado, self.limite_peso, espera)
             self._dormir(espera)
 
 

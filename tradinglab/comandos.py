@@ -43,8 +43,8 @@ def _normalizar_simbolos(simbolos: list[str] | None, por_defecto: tuple[str, ...
     return [s.upper().replace("/", "").replace("-", "") for s in simbolos]
 
 
-def comando_descargar(config: Config, simbolos: list[str], intervalos: list[str]) -> int:
-    for intervalo in intervalos:
+def comando_descargar(config: Config, series: list[tuple[str, str]]) -> int:
+    for _, intervalo in series:
         duracion_ms(intervalo)
 
     rec = config.recolector
@@ -53,27 +53,26 @@ def comando_descargar(config: Config, simbolos: list[str], intervalos: list[str]
     inicio_reloj = time.monotonic()
     fallidas: list[str] = []
     try:
-        for simbolo in simbolos:
-            for intervalo in intervalos:
-                log.info("%s %s: descargando...", simbolo, intervalo)
-                try:
-                    r = descargar_serie(con, cliente, simbolo, intervalo, rec.inicio_ms)
-                except IPBloqueada as error:
-                    log.error("%s", error)
-                    return 2
-                except ErrorBinance as error:
-                    log.error("%s %s: no se pudo descargar. %s", simbolo, intervalo, error)
-                    fallidas.append(f"{simbolo} {intervalo}")
-                    continue
-                ultima = ms_a_texto(r.ultima_ts) if r.ultima_ts is not None else "sin velas"
-                log.info(
-                    "%s %s: %s nuevas en %s. Última vela: %s",
-                    simbolo,
-                    intervalo,
-                    _cuantas(r.insertadas, "vela", "velas"),
-                    _cuantas(r.lotes, "petición", "peticiones"),
-                    ultima,
-                )
+        for simbolo, intervalo in series:
+            log.info("%s %s: descargando...", simbolo, intervalo)
+            try:
+                r = descargar_serie(con, cliente, simbolo, intervalo, rec.inicio_ms)
+            except IPBloqueada as error:
+                log.error("%s", error)
+                return 2
+            except ErrorBinance as error:
+                log.error("%s %s: no se pudo descargar. %s", simbolo, intervalo, error)
+                fallidas.append(f"{simbolo} {intervalo}")
+                continue
+            ultima = ms_a_texto(r.ultima_ts) if r.ultima_ts is not None else "sin velas"
+            log.info(
+                "%s %s: %s nuevas en %s. Última vela: %s",
+                simbolo,
+                intervalo,
+                _cuantas(r.insertadas, "vela", "velas"),
+                _cuantas(r.lotes, "petición", "peticiones"),
+                ultima,
+            )
     except KeyboardInterrupt:
         log.warning("Interrumpido. Lo guardado se conserva; la próxima corrida reanuda desde ahí.")
         return 130
@@ -218,7 +217,7 @@ def comando_backtest(
     capital = config.costos.capital_inicial if capital is None else capital
     con = db.conectar(config.ruta_base)
     try:
-        serie = cargar_serie(con, simbolo, intervalo)
+        serie = cargar_serie(con, simbolo, intervalo, con_factores=bool(e.factores))
         desde_ms = fecha_a_ms(desde) if desde else None
         hasta_ms = fecha_a_ms(hasta) if hasta else None
         c = motor.backtest(serie, e, completos, desde_ms, hasta_ms, costos, capital, fraccion)
@@ -441,6 +440,121 @@ def comando_walk_forward(
     return 0
 
 
+# --- Fase 6: factores externos y estudio de eventos ------------------------------------------
+
+
+def comando_factores(config: Config, simbolos: list[str]) -> int:
+    """Descarga funding, métricas de futuros y miedo y codicia (incremental)."""
+    from datetime import datetime, timedelta, timezone
+
+    from tradinglab.factores.descarga import (
+        ArchivosBinance,
+        descargar_funding,
+        descargar_metricas,
+        descargar_miedo_codicia,
+    )
+
+    fac = config.factores
+    con = db.conectar(config.ruta_base)
+    fallos = 0
+    try:
+        try:
+            dias = descargar_miedo_codicia(con, fac.url_miedo_codicia)
+            log.info("Miedo y codicia: %s días", f"{dias:,}")
+        except Exception as error:  # servicio externo: que no tumbe lo demás
+            log.error("Miedo y codicia: no se pudo descargar. %s", error)
+            fallos += 1
+
+        futuros = ClienteBinance(urls=[fac.url_futuros], pausa=0.2, limite_peso=2400)
+        archivos = ArchivosBinance(fac.url_archivos)
+        inicio = datetime.fromtimestamp(config.recolector.inicio_ms / 1000, tz=timezone.utc).date()
+        ayer = datetime.now(timezone.utc).date() - timedelta(days=1)
+        for simbolo in simbolos:
+            try:
+                n = descargar_funding(con, futuros, simbolo, config.recolector.inicio_ms)
+                log.info("%s: %s tasas de funding nuevas", simbolo, f"{n:,}")
+                filas, faltan = descargar_metricas(con, archivos, simbolo, inicio, ayer, avisar=log.info)
+                log.info("%s: %s registros de métricas de futuros nuevos%s", simbolo, f"{filas:,}",
+                         f" ({faltan} días sin archivo)" if faltan else "")
+            except ErrorBinance as error:
+                log.error("%s: %s", simbolo, error)
+                fallos += 1
+    finally:
+        con.close()
+    return 1 if fallos else 0
+
+
+def _x(valor: float | None) -> str:
+    return "-" if valor is None else f"{valor:.2f}x"
+
+
+def imprimir_eventos(resultados: list[dict]) -> None:
+    from tradinglab.factores.tabla import FACTORES
+
+    for r in resultados:
+        ent, pru = r["entrenamiento"], r["prueba"]
+        corte = ms_a_texto(r["corte_ms"])[:10]
+        print(f"\n{r['simbolo']} {r['intervalo']}: 'caída' = rendimiento a {r['horizonte_h']} h de "
+              f"{pct(r['umbral_caida'])} o peor (el 5% peor del entrenamiento).")
+        print(f"  Entrenamiento hasta {corte}: {ent['caidas_independientes']} caídas independientes. "
+              f"Prueba desde {corte}: {pru['caidas_independientes']} caídas independientes "
+              f"(tasa base en prueba {pct(pru['tasa_base'], False)}).")
+        filas = []
+        for f in r["factores"]:
+            nombre = f["factor"] + (" (ref.)" if f["referencia"] else "")
+            if not f["evaluado"]:
+                desde = ms_a_texto(f["desde_ms"])[:10] if f["desde_ms"] else "sin datos"
+                filas.append((nombre, desde, "-", "-", "-", "-", "-", "pocos datos", "-", "-"))
+                continue
+            quintil = f["quintil_riesgoso"]
+            etiqueta = {1: "1 (más bajo)", 5: "5 (más alto)"}.get(quintil, str(quintil))
+            filas.append((
+                nombre, ms_a_texto(f["desde_ms"])[:10],
+                f"{f['correlacion_entrenamiento']:+.3f}", f"{f['correlacion_prueba']:+.3f}", etiqueta,
+                f"{pct(f['p_caida_entrenamiento'], False)} ({_x(f['lift_entrenamiento'])})",
+                f"{pct(f['p_caida_prueba'], False)} ({_x(f['lift_prueba'])})",
+                _si_no(f["se_sostiene"]),
+                "-" if f["referencia"] else
+                f"{_x(f['sobre_volatilidad_entrenamiento'])} -> {_x(f['sobre_volatilidad_prueba'])}",
+                "-" if f["referencia"] else _si_no(f["agrega_sobre_volatilidad"]),
+            ))
+        encabezados = ("factor", "datos desde", "corr. entren.", "corr. prueba", "quintil con más caídas",
+                       "P(caída) entren.", "P(caída) prueba", "¿se sostiene?", "vs. volatilidad ent. -> prueba",
+                       "¿agrega?")
+        print("  " + tabla(encabezados, filas, {0, 1}).replace("\n", "\n  "))
+    print("\n'Se sostiene' = el quintil con más caídas en entrenamiento también tiene al menos 1.25 veces "
+          "la tasa base en la prueba. La correlación es contra el rendimiento de las horas siguientes.")
+    print("'vs. volatilidad' = caídas en el quintil riesgoso del factor entre las que predeciría la volatilidad "
+          "sola. Cerca de 1.00x: el factor solo repite la volatilidad. '¿Agrega?' = se sostiene y queda en "
+          "1.20x o más en entrenamiento y en prueba.")
+    print("Qué mide cada factor:")
+    for nombre, descripcion in FACTORES.items():
+        print(f"  {nombre}: {descripcion}")
+
+
+def comando_eventos(config: Config, simbolos: list[str], intervalo: str, horizonte: int, corte: str,
+                    guardar: bool) -> int:
+    from tradinglab.factores.eventos import estudiar_serie
+
+    version = version_codigo()
+    corte_ms = fecha_a_ms(corte)
+    con = db.conectar(config.ruta_base)
+    try:
+        resultados = [estudiar_serie(con, s, intervalo, horizonte, corte_ms) for s in simbolos]
+        imprimir_eventos(resultados)
+        if guardar:
+            configuracion = {"simbolos": simbolos, "intervalo": intervalo, "horizonte_h": horizonte, "corte": corte}
+            evaluados = sum(f["evaluado"] for r in resultados for f in r["factores"])
+            descripcion = (f"factores contra caídas a {horizonte} h en {', '.join(simbolos)} {intervalo} "
+                           f"(corte {corte})")
+            estudio_id = guardar_estudio(con, "eventos", descripcion, configuracion, [], {"resultados": resultados},
+                                         evaluados, max(r["fin_ms"] for r in resultados), version)
+            print(f"\nGuardado como estudio #{estudio_id} ({evaluados} factores evaluados).")
+    finally:
+        con.close()
+    return 0
+
+
 # --- Fase 4: panel web ----------------------------------------------------------------------
 
 
@@ -564,6 +678,8 @@ def comando_estudios(config: Config, estudio_id: int | None) -> int:
             imprimir_barrido(e["resumen"])
         elif e["tipo"] == "walk_forward":
             imprimir_walk_forward(e["resumen"]["resumenes"], e["resumen"]["pliegues"])
+        elif e["tipo"] == "eventos":
+            imprimir_eventos(e["resumen"]["resultados"])
         else:
             print(json.dumps(e["resumen"], indent=2, ensure_ascii=False))
     finally:

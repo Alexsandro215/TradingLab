@@ -51,9 +51,13 @@ class Serie:
         return inicio, fin
 
 
-def cargar_serie(con: sqlite3.Connection, simbolo: str, intervalo: str) -> Serie:
+def cargar_serie(con: sqlite3.Connection, simbolo: str, intervalo: str, con_factores: bool = False) -> Serie:
     """Carga toda la serie. Las estrategias calculan sobre todo el historial (sus indicadores
-    solo miran hacia atrás) y el motor simula solo la ventana pedida."""
+    solo miran hacia atrás) y el motor simula solo la ventana pedida.
+
+    Con `con_factores`, agrega una columna por factor externo (ver factores/tabla.py), con el
+    valor que se conocía al cierre de cada vela.
+    """
     cursor = con.execute(
         f"SELECT {', '.join(COLUMNAS)} FROM velas WHERE simbolo = ? AND intervalo = ? ORDER BY ts",
         (simbolo, intervalo),
@@ -65,4 +69,9 @@ def cargar_serie(con: sqlite3.Connection, simbolo: str, intervalo: str) -> Serie
             f"python -m tradinglab descargar --simbolo {simbolo} --intervalo {intervalo}"
         )
     velas = velas.astype({"ts": "int64", "operaciones": "int64"})
-    return Serie(simbolo, intervalo, velas)
+    serie = Serie(simbolo, intervalo, velas)
+    if con_factores:
+        from tradinglab.factores.tabla import tabla_factores  # aquí para no crear un ciclo de imports
+
+        serie = Serie(simbolo, intervalo, pd.concat([serie.velas, tabla_factores(con, serie)], axis=1))
+    return serie

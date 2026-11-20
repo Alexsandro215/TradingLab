@@ -83,7 +83,7 @@ def correr_walk_forward(
 ) -> ResultadoWalkForward:
     puntaje(Metricas(1, 1, 0, 0, 0, 0, 0, None, 0), criterio)  # valida el criterio
     e = obtener(estrategia)
-    serie = cargar_serie(con, simbolo, intervalo)
+    serie = cargar_serie(con, simbolo, intervalo, con_factores=bool(e.factores))
     rejilla = e.rejilla()
     objetivos = [e.objetivo(serie.velas, p) for p in rejilla]
 

@@ -63,6 +63,7 @@ Los principios 6 y 7 los propuso Claude en el arranque y el usuario los aprobó 
 | 3 | Validación fuera de muestra y corridas masivas por línea de comandos | Hecha el 2026-11-20 ([docs/RESULTADOS.md](docs/RESULTADOS.md)) |
 | 4 | Panel web                                                              | Hecha el 2026-11-20                                           |
 | 5 | Operación en papel con datos en vivo                                  | Hecha el 2026-11-20 (probada en vivo 3 minutos)               |
+| 6 | Factores externos y estudio de eventos                                 | Hecha el 2026-11-20 (la pidió el usuario después del plan)    |
 
 Los hallazgos de la investigación se anotan en [docs/RESULTADOS.md](docs/RESULTADOS.md) (lo más
 reciente arriba). Antes de proponer estrategias o estudios nuevos, léelo.
@@ -77,6 +78,11 @@ reciente arriba). Antes de proponer estrategias o estudios nuevos, léelo.
 4. **Panel web**: FastAPI con TradingView Lightweight Charts; operaciones marcadas sobre las
    velas, curva de capital y drawdown.
 5. **Operación en papel**: datos en vivo por websocket y órdenes simuladas, sin dinero real.
+6. **Factores externos**: funding e interés abierto de los futuros, índice de miedo y codicia, y
+   flujo de órdenes. Un estudio de eventos mide si avisan ANTES de las caídas fuertes, y hay
+   estrategias que los usan como filtro. Las noticias quedan para después: hay poca historia
+   gratuita, y si un modelo de IA califica noticias viejas, ya sabe qué pasó después (eso
+   contamina el backtest). Solo se usarían hacia adelante.
 
 ## Datos
 
@@ -92,6 +98,20 @@ reciente arriba). Antes de proponer estrategias o estudios nuevos, léelo.
 - **Velas sin operaciones** (`operaciones = 0`): Binance las llena con el cierre anterior y
   volumen 0. ZEC tiene 2,951 de 5m (0.4%); BTC y ETH, 31 cada uno. En esas velas no hubo
   precio real al cual operar: el backtest no debe llenar órdenes ahí como si hubiera liquidez.
+- **Pares reservados para validación** (`simbolos_validacion` en `config.toml`): SOLUSDT,
+  BNBUSDT y XRPUSDT, solo en 1h. Se descargan con todo lo demás, pero barrido, walk-forward y
+  eventos no los usan por defecto. Sirven para confirmar hipótesis registradas de antemano en
+  `docs/RESULTADOS.md`. Ya se usaron para H1 (momentum) y H2b (filtro de apalancamiento); para
+  hipótesis nuevas hacen falta pares reservados nuevos.
+- **Factores** (fase 6, comando `factores`):
+  - funding de los futuros perpetuos USDT-M de Binance, cada 8 h, desde 2020 en los 6 pares;
+  - métricas de futuros cada 5 minutos (interés abierto y proporciones de largos y cortos) desde
+    `data.binance.vision`: BTC desde 2020-09, el resto desde finales de 2021 o después. Se
+    publican al día siguiente, así que no sirven en vivo;
+  - índice de miedo y codicia diario de alternative.me, desde 2018. Se usa el del día anterior,
+    porque el de hoy se publica a una hora desconocida.
+  Cada factor se alinea con la vela tomando el último valor conocido al cierre de la vela; si es
+  demasiado viejo, queda vacío (`factores/tabla.py`).
 
 ## Reglas de la simulación
 
@@ -111,6 +131,9 @@ las mismas operaciones que el backtest.
   junto al rendimiento.
 - En papel, si el programa se conecta a mitad de una vela, ejecuta al precio del momento y no a la
   apertura, porque esa apertura ya pasó.
+- Las estrategias que usan factores (`Estrategia.factores`) reciben las columnas de
+  `factores/tabla.py`. La operación en papel todavía no las acepta, porque no recibe esos
+  factores en vivo.
 - Las estrategias calculan sus indicadores sobre todo el historial. Sus indicadores solo miran
   hacia atrás, y hay una prueba que lo verifica para cada estrategia.
 
@@ -151,7 +174,10 @@ las mismas operaciones que el backtest.
   pequeña y una validación. La prueba `test_estrategias_no_ven_el_futuro` las cubre solas.
 - **Estudios**: corre barridos y walk-forward con el código ya en commit, para que el estudio
   quede atado a una versión exacta. Si el commit termina en `+cambios`, el código tenía cambios
-  sin commit cuando se corrió.
+  sin commit cuando se corrió. El commit se toma al EMPEZAR cada estudio.
+- **Hipótesis antes que resultados**: cualquier prueba de confirmación (pares reservados,
+  filtros nuevos) se escribe en `docs/RESULTADOS.md`, con su criterio de éxito, ANTES de
+  correrla, y se reporta tal cual salga.
 
 ## Estructura
 
@@ -185,18 +211,24 @@ tradinglab/
   papel/                    fase 5
     operador.py             estado de la sesión y ejecución de órdenes simuladas
     en_vivo.py              websocket de Binance y relleno por REST al (re)conectar
+  factores/                 fase 6
+    descarga.py             funding (API de futuros), métricas (data.binance.vision), miedo y codicia
+    tabla.py                factores alineados con cada vela, sin ver el futuro
+    eventos.py              estudio de eventos: ¿qué factor avisa antes de las caídas?
 tests/                      pytest, sin red (fabrica.py simula a Binance)
 docs/                       HISTORIAL.md, RESULTADOS.md, PLAN_FASE1.md
 datos/tradinglab.sqlite     la base (ignorada por git)
 ```
 
-Tablas de la base (esquema v2, en `PRAGMA user_version`):
+Tablas de la base (esquema v3, en `PRAGMA user_version`):
 - `velas`: llave primaria `(simbolo, intervalo, ts)`; columnas `apertura, maximo, minimo, cierre,
   volumen, volumen_cotizado, operaciones, compra_taker, compra_taker_cotizado`.
 - `estudios` y `corridas`: cada barrido, walk-forward o backtest guardado, con su configuración,
   número de simulaciones y commit de git. En las corridas, `muestra` es `completa`,
   `entrenamiento` o `prueba`.
 - `papel_sesiones`, `papel_operaciones`, `papel_capital`: estado de la operación en papel.
+- `funding`, `metricas_futuros`, `miedo_codicia`: factores externos (fase 6), cada uno con el
+  instante en que se conoció.
 
 Los cambios de esquema hasta ahora solo agregan tablas (`CREATE TABLE IF NOT EXISTS`). Si algún
 día hay que cambiar una tabla existente, sube `db.VERSION_ESQUEMA` y escribe la migración.
@@ -241,6 +273,12 @@ python -m tradinglab panel --abrir
 python -m tradinglab papel --simbolo ETHUSDT --intervalo 1h --estrategia momentum --param ventana=168
 python -m tradinglab papel --nombre ETHUSDT-1h-momentum  # retomar
 python -m tradinglab papel --listar
+
+# Fase 6: factores externos
+python -m tradinglab factores                           # descarga incremental (la primera vez, ~30 min)
+python -m tradinglab eventos                            # ¿qué factor avisa antes de las caídas? (BTC, ETH, ZEC 1h)
+python -m tradinglab eventos --simbolo ETHUSDT --horizonte 12 --corte 2023-07-01
+python -m tradinglab walk-forward --estrategia momentum_apalancamiento --intervalo 1h
 ```
 
 - `descargar` es incremental: se puede interrumpir y volver a correr cuando sea.
@@ -250,3 +288,8 @@ python -m tradinglab papel --listar
   un año y medio.
 - `papel` rellena por REST lo que falte antes de conectarse y después de cada desconexión. Si
   la PC se suspende, la sesión se queda quieta hasta que se vuelva a correr.
+- Para dejar una sesión de papel corriendo sin ventana, independiente de la terminal (así se
+  lanzó la de ETH; el número de proceso queda en `datos/*.pid` y el registro en `datos/*.log`):
+  ```powershell
+  Start-Process .venv\Scripts\python.exe -ArgumentList "-m tradinglab papel --nombre ETHUSDT-1h-momentum" -WindowStyle Hidden -RedirectStandardError datos\papel-ETHUSDT-1h-momentum.log
+  ```

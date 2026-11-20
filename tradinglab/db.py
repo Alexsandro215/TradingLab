@@ -8,8 +8,9 @@ from typing import Sequence
 
 # Se guarda en PRAGMA user_version. Súbelo (y migra) si cambia el esquema.
 # v1: velas. v2: estudios y corridas (fase 3), operación en papel (fase 5).
+# v3: factores externos (fase 6): funding, métricas de futuros y miedo y codicia.
 # Hasta ahora los cambios solo agregan tablas, así que ESQUEMA (todo con IF NOT EXISTS) migra solo.
-VERSION_ESQUEMA = 2
+VERSION_ESQUEMA = 3
 
 ESQUEMA = """
 -- Fase 1: velas de Binance.
@@ -101,6 +102,32 @@ CREATE TABLE IF NOT EXISTS papel_capital (
     capital         REAL    NOT NULL,  -- efectivo + posición valuada al cierre
     PRIMARY KEY (sesion, ts)
 ) WITHOUT ROWID;
+
+-- Fase 6: factores externos. Cada valor se guarda con el instante en que se conoció.
+CREATE TABLE IF NOT EXISTS funding (
+    simbolo  TEXT    NOT NULL,  -- futuro perpetuo USDT-M de Binance (mismo nombre que el spot)
+    ts       INTEGER NOT NULL,  -- momento del cobro (fundingTime), ms UTC; normalmente cada 8 h
+    tasa     REAL    NOT NULL,  -- fracción: 0.0001 = 0.01%. Positiva: los largos pagan a los cortos
+    PRIMARY KEY (simbolo, ts)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS metricas_futuros (
+    simbolo               TEXT    NOT NULL,
+    ts                    INTEGER NOT NULL,  -- create_time, ms UTC (cada 5 minutos)
+    interes_abierto       REAL,              -- contratos abiertos, en moneda base
+    interes_abierto_usdt  REAL,
+    ls_top_cuentas        REAL,              -- largos/cortos de las cuentas grandes (por cuentas)
+    ls_top_posiciones     REAL,              -- largos/cortos de las cuentas grandes (por posición)
+    ls_cuentas            REAL,              -- largos/cortos de todas las cuentas
+    taker_ls              REAL,              -- volumen comprador/vendedor agresivo en futuros
+    PRIMARY KEY (simbolo, ts)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS miedo_codicia (
+    ts             INTEGER PRIMARY KEY,  -- día al que corresponde (00:00 UTC)
+    valor          INTEGER NOT NULL,     -- 0 = miedo extremo, 100 = codicia extrema
+    clasificacion  TEXT    NOT NULL
+);
 """
 
 COLUMNAS_VELAS = (

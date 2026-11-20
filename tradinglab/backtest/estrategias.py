@@ -41,6 +41,8 @@ class Estrategia:
     calcular: Callable[[pd.DataFrame, dict[str, Any]], Any] = field(repr=False)
     # Devuelve un mensaje si la combinación no tiene sentido; None si es válida.
     validar: Callable[[dict[str, Any]], str | None] = field(default=lambda p: None, repr=False)
+    # Columnas de factores externos que necesita (fase 6). Vacío = solo velas.
+    factores: tuple[str, ...] = ()
 
     def completar(self, parametros: dict[str, Any] | None = None) -> dict[str, Any]:
         """Parámetros con valores por defecto, convertidos a su tipo y validados."""
@@ -74,6 +76,11 @@ class Estrategia:
     def objetivo(self, velas: pd.DataFrame, parametros: dict[str, Any] | None = None) -> np.ndarray:
         """Posición objetivo (0 o 1) de cada vela."""
         completos = self.completar(parametros)
+        faltan = [f for f in self.factores if f not in velas.columns]
+        if faltan:
+            raise ValueError(f"La estrategia {self.nombre} necesita los factores {faltan}: carga la serie "
+                             "con cargar_serie(..., con_factores=True) y descarga los factores con "
+                             "python -m tradinglab factores")
         senal = pd.Series(self.calcular(velas, completos), index=velas.index, dtype="float64")
         return senal.fillna(0).to_numpy().astype(np.int8)
 
@@ -130,6 +137,24 @@ def _momentum(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
     return (cierre > cierre.shift(p["ventana"])).astype(float)
 
 
+# Fase 6: momentum con filtros de factores externos. Si falta el dato del factor (antes de que
+# exista), el filtro no actúa y la estrategia es igual a momentum.
+
+
+def _momentum_apalancamiento(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
+    cierre = v["cierre"]
+    sube = cierre > cierre.shift(p["ventana"])
+    apalancado = v["funding_3d"] > p["umbral"]  # demasiados largos pagando por mantenerse
+    return (sube & ~apalancado).astype(float)
+
+
+def _momentum_sentimiento(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
+    cierre = v["cierre"]
+    sube = cierre > cierre.shift(p["ventana"])
+    euforia = v["miedo_codicia"] > p["umbral"]
+    return (sube & ~euforia).astype(float)
+
+
 ESTRATEGIAS: dict[str, Estrategia] = {
     e.nombre: e
     for e in (
@@ -179,6 +204,32 @@ ESTRATEGIAS: dict[str, Estrategia] = {
                 Parametro("ventana", int, 24, "velas hacia atrás", (12, 24, 72, 168, 336, 720)),
             ),
             calcular=_momentum,
+        ),
+        Estrategia(
+            nombre="momentum_apalancamiento",
+            titulo="Momentum con filtro de apalancamiento",
+            descripcion=(
+                "Momentum, pero fuera del mercado cuando el funding promedio de los últimos 3 días "
+                "pasa del umbral: señal de demasiados largos apalancados (riesgo de liquidaciones)."
+            ),
+            parametros=(
+                Parametro("ventana", int, 720, "velas hacia atrás", (168, 720)),
+                Parametro("umbral", float, 0.0003, "funding por cobro (8 h) arriba del cual se sale",
+                          (0.0002, 0.0004)),
+            ),
+            calcular=_momentum_apalancamiento,
+            factores=("funding_3d",),
+        ),
+        Estrategia(
+            nombre="momentum_sentimiento",
+            titulo="Momentum con filtro de sentimiento",
+            descripcion="Momentum, pero fuera del mercado cuando el índice de miedo y codicia marca euforia.",
+            parametros=(
+                Parametro("ventana", int, 720, "velas hacia atrás", (168, 720)),
+                Parametro("umbral", float, 80.0, "índice arriba del cual se sale (0 a 100)", (75.0, 85.0)),
+            ),
+            calcular=_momentum_sentimiento,
+            factores=("miedo_codicia",),
         ),
     )
 }

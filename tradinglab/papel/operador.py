@@ -114,6 +114,10 @@ class Operador:
         self.con = con
         self.sesion = sesion
         self.estrategia = obtener(sesion.estrategia)
+        if self.estrategia.factores:
+            raise ValueError(f"La estrategia {sesion.estrategia} usa factores externos "
+                             f"({', '.join(self.estrategia.factores)}), y la operación en papel todavía no "
+                             "los recibe en vivo.")
         self.parametros = self.estrategia.completar(sesion.parametros)
         self.duracion = duracion_ms(sesion.intervalo)
         self.historia = historia_necesaria(sesion)

@@ -8,12 +8,22 @@ ruta_base = "datos/tradinglab.sqlite"
 # Pares de Binance spot, con el nombre que usa Binance (sin diagonal).
 simbolos = ["BTCUSDT", "ETHUSDT", "ZECUSDT"]
 intervalos = ["5m", "1h"]
+# Pares RESERVADOS para validar hipótesis con datos que nadie ha mirado. Se descargan con todo lo
+# demás, pero barrido, walk-forward y eventos no los usan por defecto: hay que pedirlos con --simbolo.
+simbolos_validacion = ["SOLUSDT", "BNBUSDT", "XRPUSDT"]
+intervalos_validacion = ["1h"]
 # Primera vela a descargar, en UTC.
 inicio = "2020-01-01"
 # API pública de Binance; la segunda es el respaldo (solo datos de mercado).
 urls = ["https://api.binance.com", "https://data-api.binance.vision"]
 # Pausa mínima entre peticiones, en segundos.
 pausa_entre_peticiones = 0.1
+
+[factores]
+# Fase 6. Futuros perpetuos USDT-M de Binance (funding) y archivos públicos de métricas.
+url_futuros = "https://fapi.binance.com"
+url_archivos = "https://data.binance.vision"
+url_miedo_codicia = "https://api.alternative.me/fng/?limit=0&format=json"
 
 [costos]
 # Se cobran en toda simulación (backtest, barridos, walk-forward y operación en papel).

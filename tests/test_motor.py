@@ -140,6 +140,10 @@ def test_estrategias_no_ven_el_futuro(nombre):
     if nombre == "cruce_medias":
         parametros = {"rapida": 5, "lenta": 20}
     serie = caminata(600, semilla=7)
+    if e.factores:  # columnas de factores simuladas, ya alineadas como las deja cargar_serie
+        rng = np.random.default_rng(1)
+        serie.velas["funding_3d"] = rng.normal(0.0002, 0.0002, len(serie))
+        serie.velas["miedo_codicia"] = rng.integers(0, 100, len(serie)).astype(float)
     completo = e.objetivo(serie.velas, parametros)
     corte = 400
     truncada = e.objetivo(serie.velas.iloc[:corte].copy(), parametros)
@@ -170,3 +174,15 @@ def test_rejillas():
     assert len(estrategias.obtener("ruptura").rejilla()) == 12
     assert len(estrategias.obtener("rsi").rejilla()) == 12
     assert len(estrategias.obtener("momentum").rejilla()) == 6
+
+
+def test_estrategia_con_factores_exige_sus_columnas():
+    serie = caminata(300)
+    e = estrategias.obtener("momentum_apalancamiento")
+    with pytest.raises(ValueError, match="factores"):
+        e.objetivo(serie.velas, {})
+    serie.velas["funding_3d"] = 0.001  # funding muy alto todo el tiempo: nunca entra
+    assert e.objetivo(serie.velas, {"ventana": 5, "umbral": 0.0003}).sum() == 0
+    serie.velas["funding_3d"] = np.nan  # sin datos del factor: igual que momentum
+    igual = estrategias.obtener("momentum").objetivo(serie.velas, {"ventana": 5})
+    assert np.array_equal(e.objetivo(serie.velas, {"ventana": 5, "umbral": 0.0003}), igual)

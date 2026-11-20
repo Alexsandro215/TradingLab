@@ -35,7 +35,11 @@ def cliente(tmp_path, monkeypatch):
 
 
 def test_pagina_y_archivos(cliente):
-    assert "TradingLab" in cliente.get("/").text
+    pagina = cliente.get("/")
+    assert "TradingLab" in pagina.text
+    # Los archivos llevan versión para que el navegador no use uno viejo tras una actualización.
+    assert "/static/app.js?v=" in pagina.text and "/static/estilo.css?v=" in pagina.text
+    assert pagina.headers["cache-control"] == "no-cache"
     assert cliente.get("/static/app.js").status_code == 200
     assert cliente.get("/static/estilo.css").status_code == 200
 

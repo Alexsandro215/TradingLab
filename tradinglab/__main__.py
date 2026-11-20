@@ -5,6 +5,7 @@ Fase 2  estrategias, backtest
 Fase 3  barrido, walk-forward, estudios
 Fase 4  panel
 Fase 5  papel
+Fase 6  factores, eventos
 
 Usa `python -m tradinglab <comando> --help` para ver las opciones de cada uno.
 """
@@ -97,6 +98,20 @@ def construir_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("estudios", help="lista los estudios guardados o muestra uno")
     p.add_argument("id", nargs="?", type=int, help="número del estudio a mostrar")
 
+    # Fase 6
+    p = sub.add_parser("factores", help="descarga funding, métricas de futuros y miedo y codicia (incremental)")
+    p.add_argument("--simbolo", action="append",
+                   help="par (se puede repetir; por defecto los de estudio y los de validación)")
+
+    p = sub.add_parser("eventos", help="estudio de eventos: ¿algún factor avisa antes de las caídas fuertes?")
+    p.add_argument("--simbolo", action="append", help="par (se puede repetir; por defecto los de config.toml)")
+    p.add_argument("--intervalo", default="1h", help="por defecto 1h")
+    p.add_argument("--horizonte", type=int, default=24,
+                   help="horas hacia adelante para medir la caída (por defecto 24)")
+    p.add_argument("--corte", default="2024-01-01",
+                   help="fecha que separa entrenamiento y prueba (por defecto 2024-01-01)")
+    p.add_argument("--no-guardar", action="store_true", help="no guardar el estudio en la base")
+
     # Fase 4
     p = sub.add_parser("panel", help="abre el panel web")
     p.add_argument("--puerto", type=int, help="puerto (por defecto el de config.toml)")
@@ -125,9 +140,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.comando == "descargar":
-            return comandos.comando_descargar(
-                config, _simbolos(args.simbolo, rec.simbolos), args.intervalo or list(rec.intervalos)
-            )
+            if args.simbolo or args.intervalo:
+                simbolos = _simbolos(args.simbolo, rec.simbolos + rec.simbolos_validacion)
+                series = [(s, i) for s in simbolos for i in (args.intervalo or list(rec.intervalos))]
+            else:
+                series = rec.series()
+            return comandos.comando_descargar(config, series)
         if args.comando == "verificar":
             return comandos.comando_verificar(
                 config, _simbolos(args.simbolo, ()) or None, args.intervalo, args.max_huecos
@@ -154,6 +172,11 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.comando == "estudios":
             return comandos.comando_estudios(config, args.id)
+        if args.comando == "factores":
+            return comandos.comando_factores(config, _simbolos(args.simbolo, rec.simbolos + rec.simbolos_validacion))
+        if args.comando == "eventos":
+            return comandos.comando_eventos(config, _simbolos(args.simbolo, rec.simbolos), args.intervalo,
+                                            args.horizonte, args.corte, not args.no_guardar)
         if args.comando == "panel":
             return comandos.comando_panel(config, args.puerto, args.abrir)
         if args.comando == "papel":

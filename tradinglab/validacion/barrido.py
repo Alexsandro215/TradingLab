@@ -43,7 +43,8 @@ def correr_barrido(
     for simbolo in simbolos:
         costos_par = costos.para(simbolo)
         for intervalo in intervalos:
-            serie = cargar_serie(con, simbolo, intervalo)
+            con_factores = any(obtener(nombre).factores for nombre in estrategias)
+            serie = cargar_serie(con, simbolo, intervalo, con_factores)
             datos_hasta = max(datos_hasta, serie.fin_ms)
             rangos = []
             for v in ventanas_estandar(tipos_ventana, int(serie.ts[0]), serie.fin_ms):

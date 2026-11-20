@@ -394,6 +394,37 @@ async function verEstudio(id) {
     return;
   }
 
+  if (e.tipo === "eventos") {
+    html += "<p class='descripcion'>¿Algún factor avisa ANTES de las caídas fuertes? 'Se sostiene' = el quintil con más caídas " +
+      "en entrenamiento también concentra caídas (al menos 1.25 veces la tasa base) en la prueba, que no se usó para nada. " +
+      "Los factores (ref.) salen del propio precio. 'Vs. volatilidad' = caídas en el quintil riesgoso entre las que predeciría la " +
+      "volatilidad sola: cerca de 1.00x, el factor solo repite la volatilidad. '¿Agrega?' = se sostiene y queda en 1.20x o más en los dos periodos.</p>";
+    for (const r of e.resumen.resultados) {
+      html += `<h2>${esc(r.simbolo)} ${esc(r.intervalo)} <small>caída = ${pct(r.umbral_caida)} o peor en ${r.horizonte_h} h · ` +
+        `${r.entrenamiento.caidas_independientes} caídas independientes en entrenamiento, ${r.prueba.caidas_independientes} en prueba ` +
+        `(desde ${dia(r.corte_ms)})</small></h2>`;
+      html += "<div class='desplazable'><table class='tabla'>" + tabla(
+        ["Factor", "Datos desde", "Corr. entren.", "Corr. prueba", "Quintil con más caídas", "P(caída) entren.", "P(caída) prueba",
+          "¿Se sostiene?", "Vs. volatilidad (ent. → prueba)", "¿Agrega?"],
+        r.factores.map((f) => {
+          const nombre = esc(f.factor) + (f.referencia ? " (ref.)" : "");
+          if (!f.evaluado) return `<tr><td>${nombre}</td><td class="izq">${f.desde_ms ? dia(f.desde_ms) : "sin datos"}</td><td colspan="8">pocos datos</td></tr>`;
+          const x = (v) => (v === null ? "-" : v.toFixed(2) + "x");
+          return `<tr><td>${nombre}</td><td class="izq">${dia(f.desde_ms)}</td>` +
+            `<td>${f.correlacion_entrenamiento.toFixed(3)}</td><td>${f.correlacion_prueba.toFixed(3)}</td><td>${f.quintil_riesgoso}</td>` +
+            `<td>${pct(f.p_caida_entrenamiento, false)} (${x(f.lift_entrenamiento)})</td>` +
+            `<td class="${f.se_sostiene ? "positivo" : ""}">${pct(f.p_caida_prueba, false)} (${x(f.lift_prueba)})</td>` +
+            `<td>${siNo(f.se_sostiene)}</td>` +
+            (f.referencia ? "<td>-</td><td>-</td>"
+              : `<td>${x(f.sobre_volatilidad_entrenamiento ?? null)} → ${x(f.sobre_volatilidad_prueba ?? null)}</td>` +
+                `<td class="${f.agrega_sobre_volatilidad ? "positivo" : ""}">${siNo(f.agrega_sobre_volatilidad)}</td>`) +
+            "</tr>";
+        })) + "</table></div>";
+    }
+    destino.innerHTML = html;
+    return;
+  }
+
   html += `<div class="desplazable"><table id="corridas-estudio" class="tabla clicable">${tablaCorridas(e.corridas)}</table></div>`;
   destino.innerHTML = html;
   conectarFilas("corridas-estudio", e.corridas);

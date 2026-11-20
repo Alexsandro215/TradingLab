@@ -6,6 +6,71 @@ hizo* y *Pendiente*.
 
 ---
 
+## 2026-11-20: Fase 6 (factores externos), validación de la pista de ETH y sesión de papel
+
+### Decisiones
+
+- El usuario propuso conectar noticias para anticipar caídas. Se acordó empezar por factores con
+  historia gratuita y marca de tiempo precisa: funding e interés abierto de futuros, miedo y
+  codicia, y flujo de órdenes. Las noticias quedan para después y solo hacia adelante: un modelo
+  de IA que califique noticias viejas ya sabe qué pasó después, y eso contaminaría el backtest.
+- **Pares reservados para validación**: SOLUSDT, BNBUSDT y XRPUSDT, solo en 1h. Están en
+  `simbolos_validacion` de `config.toml` y no se usan para explorar.
+- **Hipótesis antes que resultados**: cada prueba de confirmación (H1, H1b, H2, H2b y H3) se
+  escribió en `docs/RESULTADOS.md` con su criterio ANTES de correrla.
+- El commit de cada estudio ahora se toma al EMPEZAR a correr. Los estudios #1 a #5 (sin commit)
+  se repitieron con el commit `4adb98a` (#6 a #10), dieron lo mismo y se borraron.
+- Miedo y codicia se usa con un día de retraso, porque no se sabe a qué hora se publica el valor
+  del día.
+- El panel pide sus archivos con versión (`?v=`) y `Cache-Control: no-cache`, para que el
+  navegador no use un `app.js` viejo después de una actualización.
+
+### Lo que se hizo
+
+- Commit `4adb98a` de las fases 2 a 5.
+- **Sesión de papel de ETH en marcha**: `ETHUSDT-1h-momentum`, momentum con ventana=720, como
+  proceso independiente sin ventana. El número de proceso está en
+  `datos/papel-ETHUSDT-1h-momentum.pid` y el registro en `datos/papel-ETHUSDT-1h-momentum.log`.
+  Sigue mientras la PC esté encendida; si se reinicia, hay que relanzarla (ver CLAUDE.md).
+- Velas de 1h de SOL, BNB y XRP descargadas.
+- Fase 6 (esquema v3):
+  - `factores/` (descarga, tabla alineada sin ver el futuro y estudio de eventos);
+  - comandos `factores` y `eventos`;
+  - estrategias `momentum_apalancamiento` y `momentum_sentimiento`;
+  - vista de eventos en el panel.
+- Datos de factores descargados:
+  - funding de los 6 pares desde 2020;
+  - miedo y codicia desde 2018;
+  - métricas de futuros de BTC (desde 2020-09), ETH, ZEC y SOL (desde 2021-12). Las de BNB y
+    XRP se estaban terminando de bajar al cerrar la sesión.
+- Pruebas: **84**, todas pasan, sin red.
+- Commit de la fase 6 ("Fase 6: factores externos...").
+
+### Hallazgos (detalle en `docs/RESULTADOS.md`)
+
+- **H1 y H1b rechazadas**: momentum no le gana a las dos referencias en los pares reservados (1 de
+  3). La pista de ETH era suerte.
+- **H2**: el filtro de apalancamiento ayudó a momentum en 2 de 3 pares explorados, pero no lo
+  volvió útil. **H2b rechazada**: en los pares reservados el filtro empeoró los 3.
+- **H3 rechazada**: el funding alto solo agrega algo sobre la volatilidad en 1 o 2 de 5 pares.
+- Estudio de eventos completo (#18): **la volatilidad reciente es el mejor aviso de caídas, pero
+  también de subidas** (alrededor de 10% contra 2%, en los dos sentidos). Ni el interés abierto,
+  ni los largos/cortos, ni el flujo anticipan caídas de forma estable. El miedo extremo precede
+  caídas, pero no agrega nada sobre la volatilidad.
+
+### Pendiente
+
+- Decidir si se deja corriendo la sesión de papel de ETH (la hipótesis se rechazó, pero da datos
+  nuevos de verdad) y si se programa para que arranque sola al encender la PC.
+- **Noticias hacia adelante**: un recolector de titulares (RSS) con su hora de publicación. Así
+  se acumulan datos limpios y, en unos meses, se pueden estudiar sin contaminación.
+- La volatilidad avisa movimientos grandes pero no su dirección. Una idea a probar: reducir el
+  tamaño de la posición cuando la volatilidad está alta (gestión de riesgo, no predicción), para
+  bajar los drawdowns de 70% a 90%.
+- Para hipótesis nuevas hacen falta pares reservados nuevos: SOL, BNB y XRP ya se usaron.
+
+---
+
 ## 2026-11-20: Fases 2 a 5 terminadas
 
 ### Decisiones

@@ -20,6 +20,22 @@ class ConfigRecolector:
     inicio_ms: int
     urls: tuple[str, ...]
     pausa: float
+    # Pares reservados para validar hipótesis (no se usan para explorar).
+    simbolos_validacion: tuple[str, ...] = ()
+    intervalos_validacion: tuple[str, ...] = ()
+
+    def series(self) -> list[tuple[str, str]]:
+        """Todas las series que mantiene el recolector: las de estudio y las de validación."""
+        normales = [(s, i) for s in self.simbolos for i in self.intervalos]
+        reservadas = [(s, i) for s in self.simbolos_validacion for i in self.intervalos_validacion]
+        return normales + [x for x in reservadas if x not in normales]
+
+
+@dataclass(frozen=True)
+class ConfigFactores:
+    url_futuros: str = "https://fapi.binance.com"
+    url_archivos: str = "https://data.binance.vision"
+    url_miedo_codicia: str = "https://api.alternative.me/fng/?limit=0&format=json"
 
 
 @dataclass(frozen=True)
@@ -40,6 +56,7 @@ class Config:
     recolector: ConfigRecolector
     costos: ConfigCostos = ConfigCostos()
     puerto_panel: int = 8000
+    factores: ConfigFactores = ConfigFactores()
 
 
 def cargar_config(ruta: Path = RUTA_CONFIG) -> Config:
@@ -53,7 +70,8 @@ def cargar_config(ruta: Path = RUTA_CONFIG) -> Config:
 
     rec = datos["recolector"]
     intervalos = tuple(rec["intervalos"])
-    for intervalo in intervalos:
+    intervalos_validacion = tuple(rec.get("intervalos_validacion", intervalos))
+    for intervalo in intervalos + intervalos_validacion:
         duracion_ms(intervalo)  # falla temprano si hay un intervalo no soportado
 
     cos = datos.get("costos", {})
@@ -74,7 +92,10 @@ def cargar_config(ruta: Path = RUTA_CONFIG) -> Config:
             inicio_ms=fecha_a_ms(rec["inicio"]),
             urls=tuple(rec["urls"]),
             pausa=float(rec.get("pausa_entre_peticiones", 0.1)),
+            simbolos_validacion=tuple(s.upper() for s in rec.get("simbolos_validacion", ())),
+            intervalos_validacion=intervalos_validacion,
         ),
         costos=costos,
         puerto_panel=int(datos.get("panel", {}).get("puerto", 8000)),
+        factores=ConfigFactores(**datos.get("factores", {})),
     )
