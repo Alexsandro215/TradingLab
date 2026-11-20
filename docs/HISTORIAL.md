@@ -6,6 +6,95 @@ hizo* y *Pendiente*.
 
 ---
 
+## 2026-11-20: Fases 2 a 5 terminadas
+
+### Decisiones
+
+El usuario pidió hacer todas las fases sin plan previo. Claude tomó estas decisiones; están
+pendientes de revisión:
+
+- **Costos**: deslizamiento por lado de 0.05% en BTC y ETH y de **0.2% en ZEC**, por su poca
+  liquidez. Están en `config.toml`, sección `[costos]`.
+- **Reglas del motor**:
+  - solo largos (spot), todo o nada, o una fracción fija con `--fraccion`;
+  - la señal sale al cierre de una vela y se ejecuta en la apertura de la siguiente vela **con
+    operaciones**;
+  - al final de cada ventana se vende al cierre, pagando costos;
+  - comprar y mantener usa el mismo motor y los mismos costos;
+  - "le gana" = mayor rendimiento neto en la misma ventana.
+- **Estrategias**: 4, con pocos parámetros y rejillas pequeñas (43 combinaciones en total):
+  cruce de medias, ruptura de canal (Donchian), reversión con RSI y momentum.
+- **Barrido**: ventanas completa, por año y "desde cada año hasta hoy". Todo es dentro de
+  muestra y así se rotula.
+- **Walk-forward**:
+  - por defecto, 12 meses de entrenamiento y 3 de prueba, con ventana rodante (opción
+    `--anclado`);
+  - criterios para elegir combinación: `rendimiento` (por defecto) y `calmar`;
+  - las pruebas se encadenan y se comparan con comprar y mantener continuo en todo el tramo
+    fuera de muestra;
+  - se reporta lo que la combinación elegida "prometía" en entrenamiento contra lo que logró en
+    prueba, como señal de sobreajuste.
+- **Registro**: tablas `estudios` y `corridas` en la misma base. Cada estudio guarda su
+  configuración, el número de simulaciones y el commit de git (con `+cambios` si había cambios
+  sin commit).
+- **Panel**:
+  - solo lectura y solo en 127.0.0.1;
+  - límite de 150,000 velas por consulta;
+  - con muchas operaciones arranca mostrando las últimas 1,500 velas;
+  - el capital se ve en escala logarítmica.
+- **Papel**: mismo cálculo que el backtest. Si se conecta a mitad de una vela, ejecuta al precio
+  del momento y no a la apertura, que ya pasó. Antes de conectarse y en cada reconexión rellena
+  por REST lo que falte. El estado queda en SQLite y se retoma por `--nombre`.
+- **Esquema v2**: solo agrega tablas; la base existente se migró sola.
+- La línea de comandos se separó en `__main__.py` (argumentos), `comandos.py` y `reporte.py`.
+
+### Lo que se hizo
+
+- Paquetes `backtest/`, `validacion/`, `panel/` y `papel/`, más comandos nuevos: `estrategias`,
+  `backtest`, `barrido`, `walk-forward`, `estudios`, `panel` y `papel`.
+- Hay **71 pruebas**, todas pasan, sin red. Entre ellas:
+  - costos calculados a mano;
+  - ninguna estrategia ve el futuro;
+  - la operación en papel reproduce exactamente las operaciones del backtest;
+  - pruebas del panel y del walk-forward.
+- Todo el código pasa el análisis de sintaxis de Python 3.11.
+- Primeros estudios, guardados en la base (#1 a #5; detalle en `docs/RESULTADOS.md`):
+  - un barrido de 3,612 simulaciones;
+  - un walk-forward de 6,768 simulaciones;
+  - 3 walk-forward de robustez en 1h.
+- El panel se probó con la base real y con capturas de Edge en modo sin ventana: Backtest,
+  Estudios y Papel.
+- El papel se probó en vivo 3 minutos (BTCUSDT 1m) contra el websocket de Binance: compró,
+  vendió y volvió a comprar según las reglas. Después se borraron esa sesión de prueba y las
+  1,102 velas de 1m que bajó.
+
+### Hallazgos
+
+- Con costos reales, el resultado coincide con el ensayo original. **En 5m todo se ahoga en
+  comisiones** (de −97% a −100% fuera de muestra). En 1h casi nada le gana a las dos referencias.
+- Fuera de muestra, 2 de 24 configuraciones le ganaron a las dos:
+  - cruce de medias en ZEC 1h no aguantó las pruebas de robustez;
+  - **momentum en ETH 1h sí aguantó en 3 de 4**, casi siempre con ventana=720, pero con caídas
+    de 50% a 74%. Es una pista, no evidencia: salió de mirar 24 configuraciones.
+
+### Pendiente
+
+- **Commit de las fases 2 a 5** cuando el usuario lo indique. Después, repetir los estudios para
+  que queden atados al commit; los actuales dicen `4fbd9c3+cambios`.
+- Revisar con el usuario las decisiones de arriba, sobre todo los deslizamientos y el criterio
+  de "le gana".
+- Validar momentum en ETH 1h con datos que nadie ha mirado:
+  - otros pares (SOL, BNB, XRP: hay que agregarlos a `config.toml` y descargarlos);
+  - o una sesión de papel larga (`papel --simbolo ETHUSDT --intervalo 1h --estrategia momentum
+    --param ventana=720`).
+- Ideas abiertas en `docs/RESULTADOS.md`:
+  - sensibilidad a los costos;
+  - walk-forward que se quede fuera cuando nada gana en entrenamiento.
+- Para correr 24 horas (papel o descarga periódica) hace falta la PC encendida sin suspenderse,
+  o un servidor.
+
+---
+
 ## 2026-11-20: Fase 1 terminada, recolector de velas
 
 ### Decisiones

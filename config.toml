@@ -14,3 +14,16 @@ inicio = "2020-01-01"
 urls = ["https://api.binance.com", "https://data-api.binance.vision"]
 # Pausa mínima entre peticiones, en segundos.
 pausa_entre_peticiones = 0.1
+
+[costos]
+# Se cobran en toda simulación (backtest, barridos, walk-forward y operación en papel).
+comision = 0.001          # 0.1% por lado: tarifa spot de Binance sin descuentos
+deslizamiento = 0.0005    # 0.05% por lado para pares líquidos (BTC, ETH)
+capital_inicial = 1000.0  # USDT
+
+[costos.deslizamiento_por_par]
+# ZEC es mucho menos líquido: 2,951 velas de 5m sin ninguna operación (ver docs/HISTORIAL.md).
+ZECUSDT = 0.002           # 0.2% por lado
+
+[panel]
+puerto = 8000

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TradingLab</title>
+  <link rel="stylesheet" href="/static/estilo.css">
+  <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <header>
+    <div class="marca">
+      <h1>TradingLab</h1>
+      <span class="aviso">Laboratorio de investigación · sin dinero real</span>
+    </div>
+    <nav>
+      <button class="pestana activa" data-vista="backtest">Backtest</button>
+      <button class="pestana" data-vista="estudios">Estudios</button>
+      <button class="pestana" data-vista="papel">Papel</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Backtest -->
+    <section id="vista-backtest" class="vista activa">
+      <form id="formulario" class="formulario">
+        <label>Par <select id="f-simbolo"></select></label>
+        <label>Intervalo <select id="f-intervalo"></select></label>
+        <label>Estrategia <select id="f-estrategia"></select></label>
+        <span id="f-parametros" class="parametros"></span>
+        <label>Desde <input id="f-desde" type="date"></label>
+        <label>Hasta <input id="f-hasta" type="date"></label>
+        <label>Capital <input id="f-capital" type="number" min="1" step="any"></label>
+        <label>Fracción <input id="f-fraccion" type="number" min="0.01" max="1" step="0.01" value="1"></label>
+        <button type="submit" id="f-simular">Simular</button>
+      </form>
+      <p id="descripcion" class="descripcion"></p>
+      <p id="mensaje" class="mensaje"></p>
+
+      <div id="resultado" class="oculto">
+        <div id="veredicto" class="veredicto"></div>
+        <table id="metricas" class="tabla metricas"></table>
+
+        <h2>Velas y operaciones <small>▲ compra · ▼ venta · costos: <span id="texto-costos"></span><span id="texto-zoom"></span></small></h2>
+        <div id="grafica-velas" class="grafica alta"></div>
+        <h2>Capital <small><span class="leyenda estrategia">estrategia</span> <span class="leyenda bh">comprar y mantener</span></small></h2>
+        <div id="grafica-capital" class="grafica media"></div>
+        <h2>Drawdown (%) <small><span class="leyenda estrategia">estrategia</span> <span class="leyenda bh">comprar y mantener</span></small></h2>
+        <div id="grafica-drawdown" class="grafica baja"></div>
+
+        <h2>Operaciones <small id="texto-operaciones"></small></h2>
+        <div class="desplazable"><table id="operaciones" class="tabla"></table></div>
+      </div>
+    </section>
+
+    <!-- Estudios -->
+    <section id="vista-estudios" class="vista">
+      <p class="descripcion">Barridos y walk-forward guardados. En los barridos todo es dentro de muestra;
+        la evidencia es lo que da el walk-forward fuera de muestra. Haz clic en una fila para verla en la gráfica.</p>
+      <div class="desplazable corta"><table id="lista-estudios" class="tabla clicable"></table></div>
+      <div id="detalle-estudio"></div>
+    </section>
+
+    <!-- Papel -->
+    <section id="vista-papel" class="vista">
+      <p class="descripcion">Sesiones de operación en papel: datos en vivo de Binance y órdenes simuladas con los
+        mismos costos que el backtest. Se actualiza sola cada 15 segundos.</p>
+      <div class="desplazable corta"><table id="lista-papel" class="tabla clicable"></table></div>
+      <div id="detalle-papel" class="oculto">
+        <h2 id="titulo-papel"></h2>
+        <div id="grafica-papel" class="grafica alta"></div>
+        <h2>Capital</h2>
+        <div id="grafica-papel-capital" class="grafica media"></div>
+        <div class="desplazable"><table id="operaciones-papel" class="tabla"></table></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

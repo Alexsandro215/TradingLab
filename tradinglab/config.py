@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from tradinglab.backtest.costos import Costos
 from tradinglab.tiempo import duracion_ms, fecha_a_ms
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -22,9 +23,23 @@ class ConfigRecolector:
 
 
 @dataclass(frozen=True)
+class ConfigCostos:
+    comision: float = 0.001
+    deslizamiento: float = 0.0005
+    capital_inicial: float = 1000.0
+    deslizamiento_por_par: dict[str, float] = field(default_factory=dict)
+
+    def para(self, simbolo: str) -> Costos:
+        """Costos de un par: el deslizamiento puede ser distinto por par."""
+        return Costos(self.comision, self.deslizamiento_por_par.get(simbolo, self.deslizamiento))
+
+
+@dataclass(frozen=True)
 class Config:
     ruta_base: Path
     recolector: ConfigRecolector
+    costos: ConfigCostos = ConfigCostos()
+    puerto_panel: int = 8000
 
 
 def cargar_config(ruta: Path = RUTA_CONFIG) -> Config:
@@ -41,6 +56,16 @@ def cargar_config(ruta: Path = RUTA_CONFIG) -> Config:
     for intervalo in intervalos:
         duracion_ms(intervalo)  # falla temprano si hay un intervalo no soportado
 
+    cos = datos.get("costos", {})
+    por_par = {k.upper(): float(v) for k, v in cos.get("deslizamiento_por_par", {}).items()}
+    costos = ConfigCostos(
+        comision=float(cos.get("comision", 0.001)),
+        deslizamiento=float(cos.get("deslizamiento", 0.0005)),
+        capital_inicial=float(cos.get("capital_inicial", 1000.0)),
+        deslizamiento_por_par=por_par,
+    )
+    costos.para("")  # valida los rangos
+
     return Config(
         ruta_base=ruta_base,
         recolector=ConfigRecolector(
@@ -50,4 +75,6 @@ def cargar_config(ruta: Path = RUTA_CONFIG) -> Config:
             urls=tuple(rec["urls"]),
             pausa=float(rec.get("pausa_entre_peticiones", 0.1)),
         ),
+        costos=costos,
+        puerto_panel=int(datos.get("panel", {}).get("puerto", 8000)),
     )

@@ -86,3 +86,32 @@ class FuenteFalsa:
     def velas(self, simbolo: str, intervalo: str, inicio_ms: int) -> list[list[Any]]:
         self.pedidos.append(inicio_ms)
         return [k for k in self.klines if k[0] >= inicio_ms][: self.limite]
+
+
+def serie_backtest(aperturas, cierres, operaciones=None, simbolo="BTCUSDT", intervalo="1h", inicio=T0):
+    """Una Serie del backtest con velas de 1h a partir de listas de precios."""
+    import pandas as pd
+
+    from tradinglab.backtest.datos import Serie
+
+    n = len(aperturas)
+    velas = pd.DataFrame({
+        "ts": [inicio + i * UNA_HORA for i in range(n)],
+        "apertura": [float(x) for x in aperturas],
+        "maximo": [max(a, c) * 1.01 for a, c in zip(aperturas, cierres)],
+        "minimo": [min(a, c) * 0.99 for a, c in zip(aperturas, cierres)],
+        "cierre": [float(x) for x in cierres],
+        "volumen": [1.0] * n,
+        "operaciones": operaciones if operaciones is not None else [10] * n,
+    })
+    return Serie(simbolo, intervalo, velas)
+
+
+def caminata(n, semilla=0, inicio=T0):
+    """Serie con precios de caminata aleatoria (para pruebas generales)."""
+    import numpy as np
+
+    rng = np.random.default_rng(semilla)
+    cierres = 100 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))
+    aperturas = np.concatenate([[100.0], cierres[:-1]])
+    return serie_backtest(list(aperturas), list(cierres), inicio=inicio)

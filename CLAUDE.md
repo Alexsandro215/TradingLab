@@ -56,13 +56,16 @@ Los principios 6 y 7 los propuso Claude en el arranque y el usuario los aprobó 
 
 ## Fases
 
-| # | Fase | Estado |
-|---|------|--------|
-| 1 | Recolector de velas hacia SQLite | Hecha el 2026-11-20 ([docs/PLAN_FASE1.md](docs/PLAN_FASE1.md)) |
-| 2 | Motor de backtest con costos reales y las dos referencias | Pendiente |
-| 3 | Validación fuera de muestra y corridas masivas por línea de comandos | Pendiente |
-| 4 | Panel web | Pendiente |
-| 5 | Operación en papel con datos en vivo | Pendiente |
+| # | Fase                                                                   | Estado                                                        |
+| - | ---------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 1 | Recolector de velas hacia SQLite                                       | Hecha el 2026-11-20 ([docs/PLAN_FASE1.md](docs/PLAN_FASE1.md)) |
+| 2 | Motor de backtest con costos reales y las dos referencias              | Hecha el 2026-11-20                                           |
+| 3 | Validación fuera de muestra y corridas masivas por línea de comandos | Hecha el 2026-11-20 ([docs/RESULTADOS.md](docs/RESULTADOS.md)) |
+| 4 | Panel web                                                              | Hecha el 2026-11-20                                           |
+| 5 | Operación en papel con datos en vivo                                  | Hecha el 2026-11-20 (probada en vivo 3 minutos)               |
+
+Los hallazgos de la investigación se anotan en [docs/RESULTADOS.md](docs/RESULTADOS.md) (lo más
+reciente arriba). Antes de proponer estrategias o estudios nuevos, léelo.
 
 1. **Recolector**: velas OHLCV de BTC/USDT, ETH/USDT y ZEC/USDT desde 2020-01-01, en 5m y 1h
    para empezar, desde la API pública de Binance (sin llaves) hacia SQLite. Descarga incremental
@@ -90,6 +93,27 @@ Los principios 6 y 7 los propuso Claude en el arranque y el usuario los aprobó 
   volumen 0. ZEC tiene 2,951 de 5m (0.4%); BTC y ETH, 31 cada uno. En esas velas no hubo
   precio real al cual operar: el backtest no debe llenar órdenes ahí como si hubiera liquidez.
 
+## Reglas de la simulación
+
+Las aplican igual el motor de backtest (`backtest/motor.py`) y la operación en papel
+(`papel/operador.py`). Una prueba verifica que, con las mismas velas, el papel haga exactamente
+las mismas operaciones que el backtest.
+
+- Solo posiciones largas (spot). Al entrar se invierte `fraccion` del capital (1 = todo); al
+  salir se vende todo.
+- La estrategia da una posición objetivo (0 o 1) al cierre de cada vela; se ejecuta en la
+  apertura de la siguiente vela **con operaciones**. En velas sin operaciones no se ejecuta nada.
+- Costos por lado: comisión de 0.1% y deslizamiento de 0.05% (0.2% en ZEC), en `config.toml`.
+- Al final de cada ventana se vende al cierre de la última vela, pagando costos.
+- Comprar y mantener usa el mismo motor y los mismos costos: compra al abrir la ventana y vende
+  al cerrarla.
+- "Le gana" significa mayor rendimiento neto en la misma ventana. El drawdown se reporta siempre
+  junto al rendimiento.
+- En papel, si el programa se conecta a mitad de una vela, ejecuta al precio del momento y no a la
+  apertura, porque esa apertura ya pasó.
+- Las estrategias calculan sus indicadores sobre todo el historial. Sus indicadores solo miran
+  hacia atrás, y hay una prueba que lo verifica para cada estrategia.
+
 ## Stack
 
 - **Python 3.11 o más nuevo.** Localmente hay Python 3.14 (Windows 11), pero el código debe
@@ -99,10 +123,13 @@ Los principios 6 y 7 los propuso Claude en el arranque y el usuario los aprobó 
 - **Configuración** en `config.toml`, leída con `tomllib` (biblioteca estándar).
 - **Descarga**: `requests` contra la API REST pública de Binance, sin ccxt, para conservar el
   número de operaciones y el volumen taker de cada vela.
-- **Análisis y backtest**: pandas y numpy (fase 2).
-- **Panel web**: FastAPI, uvicorn y TradingView Lightweight Charts (fase 4).
-- **Datos en vivo**: websockets públicos de Binance (fase 5).
-- **Pruebas**: pytest.
+- **Análisis y backtest**: pandas y numpy (fase 2). El motor solo recorre los puntos donde
+  cambia la posición: un backtest de 1h tarda ~0.02 s y uno de 5m completo ~0.5 s.
+- **Panel web**: FastAPI, uvicorn y TradingView Lightweight Charts 4.2.3 (fase 4), en JavaScript
+  sin compilar.
+- **Datos en vivo**: `websockets` contra el websocket público de Binance (fase 5); respaldo
+  `data-stream.binance.vision`.
+- **Pruebas**: pytest (y httpx para el cliente de pruebas de FastAPI).
 
 ## Convenciones
 
@@ -120,28 +147,59 @@ Los principios 6 y 7 los propuso Claude en el arranque y el usuario los aprobó 
 - **Sin secretos**: nunca se guardan llaves, contraseñas ni archivos `.env` en el repositorio.
 - **Dependencias mínimas**, declaradas en `pyproject.toml`.
 - **Pruebas sin red**: las pruebas usan respuestas de Binance simuladas.
+- **Estrategias nuevas**: van en `backtest/estrategias.py` con pocos parámetros, una rejilla
+  pequeña y una validación. La prueba `test_estrategias_no_ven_el_futuro` las cubre solas.
+- **Estudios**: corre barridos y walk-forward con el código ya en commit, para que el estudio
+  quede atado a una versión exacta. Si el commit termina en `+cambios`, el código tenía cambios
+  sin commit cuando se corrió.
 
 ## Estructura
 
 ```
-config.toml                 pares, intervalos, fecha de inicio, ruta de la base, URLs de Binance
+config.toml                 pares, intervalos, fecha de inicio, base, URLs, costos, puerto del panel
 pyproject.toml              dependencias; Python >= 3.11
 tradinglab/
-  __main__.py               línea de comandos: python -m tradinglab <comando>
+  __main__.py               lectura de argumentos: python -m tradinglab <comando>
+  comandos.py               cada comando (imprime en la terminal)
+  reporte.py                formato de tablas y porcentajes para la terminal
   config.py                 lee config.toml
-  db.py                     conexión a SQLite, esquema (tabla velas) e inserción sin duplicados
+  db.py                     conexión a SQLite y esquema (velas, estudios, corridas, papel_*)
   tiempo.py                 duración de intervalos y conversión de fechas (UTC, ms)
-  recolector/
+  recolector/               fase 1
     binance.py              cliente REST público: reintentos, límites de peso, URL de respaldo
     descarga.py             descarga incremental por serie
     verificacion.py         huecos, velas inválidas, cruce 5m contra 1h
+  backtest/                 fase 2
+    costos.py               comisión y deslizamiento (compartido con papel)
+    datos.py                carga de una serie desde SQLite
+    estrategias.py          catálogo: cruce_medias, ruptura, rsi, momentum (con sus rejillas)
+    motor.py                simulación, métricas y las dos referencias
+  validacion/               fase 3
+    ventanas.py             ventanas de calendario y pliegues de walk-forward
+    barrido.py              corridas masivas (todo dentro de muestra)
+    walk_forward.py         validación fuera de muestra
+    registro.py             guarda estudios y corridas con el commit de git
+  panel/                    fase 4
+    app.py                  FastAPI (solo lectura, 127.0.0.1)
+    static/                 index.html, app.js, estilo.css (Lightweight Charts 4.2.3 desde unpkg)
+  papel/                    fase 5
+    operador.py             estado de la sesión y ejecución de órdenes simuladas
+    en_vivo.py              websocket de Binance y relleno por REST al (re)conectar
 tests/                      pytest, sin red (fabrica.py simula a Binance)
+docs/                       HISTORIAL.md, RESULTADOS.md, PLAN_FASE1.md
 datos/tradinglab.sqlite     la base (ignorada por git)
 ```
 
-La tabla `velas` tiene llave primaria `(simbolo, intervalo, ts)` y columnas `apertura, maximo,
-minimo, cierre, volumen, volumen_cotizado, operaciones, compra_taker, compra_taker_cotizado`.
-La versión del esquema está en `PRAGMA user_version` (`db.VERSION_ESQUEMA`).
+Tablas de la base (esquema v2, en `PRAGMA user_version`):
+- `velas`: llave primaria `(simbolo, intervalo, ts)`; columnas `apertura, maximo, minimo, cierre,
+  volumen, volumen_cotizado, operaciones, compra_taker, compra_taker_cotizado`.
+- `estudios` y `corridas`: cada barrido, walk-forward o backtest guardado, con su configuración,
+  número de simulaciones y commit de git. En las corridas, `muestra` es `completa`,
+  `entrenamiento` o `prueba`.
+- `papel_sesiones`, `papel_operaciones`, `papel_capital`: estado de la operación en papel.
+
+Los cambios de esquema hasta ahora solo agregan tablas (`CREATE TABLE IF NOT EXISTS`). Si algún
+día hay que cambiar una tabla existente, sube `db.VERSION_ESQUEMA` y escribe la migración.
 
 ## Comandos
 
@@ -156,13 +214,39 @@ python -m pip install -e ".[dev]"
 Con el entorno activado:
 
 ```powershell
-python -m pytest                                        # pruebas
+python -m pytest                                        # pruebas (71, sin red, ~4 s)
+python -m tradinglab --help                             # todos los comandos
+
+# Fase 1: datos
 python -m tradinglab descargar                          # baja o actualiza todo lo de config.toml
 python -m tradinglab descargar --simbolo ZECUSDT --intervalo 1h   # una sola serie
 python -m tradinglab verificar                          # resumen y control de calidad
-python -m tradinglab verificar --simbolo BTCUSDT --max-huecos 20
+
+# Fase 2: un backtest contra las dos referencias
+python -m tradinglab estrategias                        # estrategias, parámetros y rejillas
+python -m tradinglab backtest --simbolo ETHUSDT --intervalo 1h --estrategia momentum --param ventana=168
+python -m tradinglab backtest --simbolo BTCUSDT --estrategia cruce_medias --desde 2022-01-01 --hasta 2023-01-01 --operaciones 10
+
+# Fase 3: corridas masivas y validación fuera de muestra (se guardan como estudios)
+python -m tradinglab barrido                            # todas las estrategias, pares, intervalos y ventanas (~2 min)
+python -m tradinglab barrido --estrategia rsi --intervalo 1h --ventanas anual
+python -m tradinglab walk-forward                       # 12 meses entrenamiento / 3 prueba (~2.5 min)
+python -m tradinglab walk-forward --intervalo 1h --entrenamiento 24 --prueba 6 --criterio calmar --detalle
+python -m tradinglab estudios                           # lista; `estudios 2` muestra uno
+
+# Fase 4: panel web en http://127.0.0.1:8000 (#estudios, #estudios/2 y #papel abren esas pestañas)
+python -m tradinglab panel --abrir
+
+# Fase 5: operación en papel (Ctrl+C para detener; se retoma con el mismo --nombre)
+python -m tradinglab papel --simbolo ETHUSDT --intervalo 1h --estrategia momentum --param ventana=168
+python -m tradinglab papel --nombre ETHUSDT-1h-momentum  # retomar
+python -m tradinglab papel --listar
 ```
 
-`descargar` es incremental: se puede interrumpir y volver a correr cuando sea. `verificar`
-devuelve código 1 si hay velas inválidas o diferencias entre 5m y 1h; los huecos solos no
-cuentan como error.
+- `descargar` es incremental: se puede interrumpir y volver a correr cuando sea.
+- `verificar` devuelve código 1 si hay velas inválidas o diferencias entre 5m y 1h; los huecos
+  solos no cuentan como error.
+- El panel no muestra más de 150,000 velas por consulta: 5m solo cabe en ventanas de hasta
+  un año y medio.
+- `papel` rellena por REST lo que falte antes de conectarse y después de cada desconexión. Si
+  la PC se suspende, la sesión se queda quieta hasta que se vuelva a correr.

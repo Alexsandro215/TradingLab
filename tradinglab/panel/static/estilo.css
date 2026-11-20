@@ -1,0 +1,130 @@
+:root {
+  --fondo: #120e1c;
+  --panel: #1b1529;
+  --borde: #2e2442;
+  --texto: #e6e1ef;
+  --tenue: #9a90ad;
+  --morado: #8456bd;
+  --morado-claro: #b388ff;
+  --verde: #26a69a;
+  --rojo: #ef5350;
+  --bh: #f0b429;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 20px;
+  background: #6b3fa0;
+}
+
+.marca { display: flex; align-items: baseline; gap: 12px; }
+h1 { margin: 0; font-size: 20px; }
+.aviso { color: #e6dcf5; font-size: 13px; }
+
+nav { display: flex; gap: 4px; }
+.pestana {
+  background: transparent;
+  color: #e6dcf5;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+.pestana:hover { border-color: #ffffff55; }
+.pestana.activa { background: #ffffff22; color: #fff; border-color: #ffffff66; }
+
+main { padding: 16px 20px 40px; max-width: 1500px; margin: 0 auto; }
+.vista { display: none; }
+.vista.activa { display: block; }
+.oculto { display: none !important; }
+
+.formulario {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+.formulario label, .parametros label { display: flex; flex-direction: column; gap: 3px; color: var(--tenue); font-size: 12px; }
+.parametros { display: contents; }
+select, input {
+  background: var(--fondo);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  border-radius: 5px;
+  padding: 5px 7px;
+  font: inherit;
+  min-width: 80px;
+}
+input[type="number"] { width: 100px; }
+button[type="submit"] {
+  background: var(--morado);
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 20px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button[type="submit"]:hover { background: #9568cf; }
+button[disabled] { opacity: 0.6; cursor: wait; }
+
+.descripcion { color: var(--tenue); margin: 10px 2px; }
+.mensaje { color: var(--rojo); margin: 6px 2px; min-height: 1em; }
+
+.veredicto {
+  margin: 8px 0 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--panel);
+  border-left: 4px solid var(--tenue);
+  font-weight: 600;
+}
+.veredicto.gana { border-left-color: var(--verde); }
+.veredicto.pierde { border-left-color: var(--rojo); }
+
+h2 { font-size: 15px; margin: 22px 0 8px; font-weight: 600; }
+h2 small { color: var(--tenue); font-weight: 400; margin-left: 8px; }
+.leyenda::before { content: ""; display: inline-block; width: 14px; height: 3px; margin: 0 5px 3px 8px; vertical-align: middle; }
+.leyenda.estrategia::before { background: var(--morado-claro); }
+.leyenda.bh::before { background: var(--bh); }
+
+.grafica { width: 100%; border: 1px solid var(--borde); border-radius: 8px; overflow: hidden; }
+.grafica.alta { height: 430px; }
+.grafica.media { height: 220px; }
+.grafica.baja { height: 170px; }
+
+.tabla { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.tabla th, .tabla td { padding: 5px 10px; border-bottom: 1px solid var(--borde); text-align: right; white-space: nowrap; }
+.tabla th:first-child, .tabla td:first-child, .tabla .izq { text-align: left; }
+.tabla th { color: var(--tenue); font-weight: 500; position: sticky; top: 0; background: var(--fondo); }
+.tabla.metricas { width: auto; min-width: 560px; background: var(--panel); border-radius: 8px; }
+.tabla.clicable tbody tr { cursor: pointer; }
+.tabla.clicable tbody tr:hover { background: #ffffff0d; }
+.tabla tr.seleccionada { background: #8456bd33; }
+.positivo { color: var(--verde); }
+.negativo { color: var(--rojo); }
+.desplazable { max-height: 420px; overflow: auto; border: 1px solid var(--borde); border-radius: 8px; }
+.desplazable.corta { max-height: 260px; }
+
+.tarjetas { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+.tarjeta { background: var(--panel); border: 1px solid var(--borde); border-radius: 8px; padding: 10px 14px; min-width: 170px; }
+.tarjeta .valor { font-size: 22px; font-weight: 600; }
+.tarjeta .etiqueta { color: var(--tenue); font-size: 12px; }
