@@ -98,11 +98,12 @@ reciente arriba). Antes de proponer estrategias o estudios nuevos, léelo.
 - **Velas sin operaciones** (`operaciones = 0`): Binance las llena con el cierre anterior y
   volumen 0. ZEC tiene 2,951 de 5m (0.4%); BTC y ETH, 31 cada uno. En esas velas no hubo
   precio real al cual operar: el backtest no debe llenar órdenes ahí como si hubiera liquidez.
-- **Pares reservados para validación** (`simbolos_validacion` en `config.toml`): SOLUSDT,
-  BNBUSDT y XRPUSDT, solo en 1h. Se descargan con todo lo demás, pero barrido, walk-forward y
-  eventos no los usan por defecto. Sirven para confirmar hipótesis registradas de antemano en
-  `docs/RESULTADOS.md`. Ya se usaron para H1 (momentum) y H2b (filtro de apalancamiento); para
-  hipótesis nuevas hacen falta pares reservados nuevos.
+- **Pares reservados para validación** (`simbolos_validacion` en `config.toml`, solo en 1h): se
+  descargan con todo lo demás, pero barrido, walk-forward y eventos no los usan por defecto.
+  Sirven para confirmar hipótesis registradas de antemano en `docs/RESULTADOS.md`. **Todos están
+  gastados**: SOL, BNB y XRP (H1, H2b y H3) y ADA, LTC y LINK (H4). Para una hipótesis nueva hay
+  que reservar pares nuevos ANTES de explorar, por ejemplo DOGE, AVAX o DOT (verificar que
+  existan desde 2020).
 - **Factores** (fase 6, comando `factores`):
   - funding de los futuros perpetuos USDT-M de Binance, cada 8 h, desde 2020 en los 6 pares;
   - métricas de futuros cada 5 minutos (interés abierto y proporciones de largos y cortos) desde
@@ -121,6 +122,13 @@ las mismas operaciones que el backtest.
 
 - Solo posiciones largas (spot). Al entrar se invierte `fraccion` del capital (1 = todo); al
   salir se vende todo.
+- **Posiciones parciales**: si la estrategia es `fraccional`, su objetivo es la fracción del
+  capital a tener invertida (0 a 1). Solo se rebalancea cuando la diferencia pasa de 10 puntos
+  (`BANDA_REBALANCEO`), y salir del todo siempre se ejecuta. Cada venta, total o parcial, es una
+  operación, y su ganancia se mide contra el costo promedio. La operación en papel todavía solo
+  hace todo o nada.
+- Métricas de riesgo además de las mínimas: rendimiento anual compuesto y **Calmar** =
+  rendimiento anual / |drawdown máximo|.
 - La estrategia da una posición objetivo (0 o 1) al cierre de cada vela; se ejecuta en la
   apertura de la siguiente vela **con operaciones**. En velas sin operaciones no se ejecuta nada.
 - Costos por lado: comisión de 0.1% y deslizamiento de 0.05% (0.2% en ZEC), en `config.toml`.
@@ -198,7 +206,9 @@ tradinglab/
   backtest/                 fase 2
     costos.py               comisión y deslizamiento (compartido con papel)
     datos.py                carga de una serie desde SQLite
-    estrategias.py          catálogo: cruce_medias, ruptura, rsi, momentum (con sus rejillas)
+    estrategias.py          catálogo con sus rejillas: cruce_medias, ruptura, rsi, momentum;
+                            con factores: momentum_apalancamiento, momentum_sentimiento;
+                            de riesgo: tendencia_larga, volatilidad_objetivo, tendencia_volatilidad
     motor.py                simulación, métricas y las dos referencias
   validacion/               fase 3
     ventanas.py             ventanas de calendario y pliegues de walk-forward
@@ -279,6 +289,9 @@ python -m tradinglab factores                           # descarga incremental (
 python -m tradinglab eventos                            # ¿qué factor avisa antes de las caídas? (BTC, ETH, ZEC 1h)
 python -m tradinglab eventos --simbolo ETHUSDT --horizonte 12 --corte 2023-07-01
 python -m tradinglab walk-forward --estrategia momentum_apalancamiento --intervalo 1h
+
+# Gestión de riesgo (posiciones parciales): elegir por Calmar
+python -m tradinglab walk-forward --estrategia tendencia_volatilidad --intervalo 1h --criterio calmar
 ```
 
 - `descargar` es incremental: se puede interrumpir y volver a correr cuando sea.

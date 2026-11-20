@@ -118,6 +118,9 @@ class Operador:
             raise ValueError(f"La estrategia {sesion.estrategia} usa factores externos "
                              f"({', '.join(self.estrategia.factores)}), y la operación en papel todavía no "
                              "los recibe en vivo.")
+        if self.estrategia.fraccional:
+            raise ValueError(f"La estrategia {sesion.estrategia} usa posiciones parciales, y la operación en "
+                             "papel todavía solo hace todo o nada.")
         self.parametros = self.estrategia.completar(sesion.parametros)
         self.duracion = duracion_ms(sesion.intervalo)
         self.historia = historia_necesaria(sesion)

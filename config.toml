@@ -10,7 +10,9 @@ simbolos = ["BTCUSDT", "ETHUSDT", "ZECUSDT"]
 intervalos = ["5m", "1h"]
 # Pares RESERVADOS para validar hipótesis con datos que nadie ha mirado. Se descargan con todo lo
 # demás, pero barrido, walk-forward y eventos no los usan por defecto: hay que pedirlos con --simbolo.
-simbolos_validacion = ["SOLUSDT", "BNBUSDT", "XRPUSDT"]
+# SOL, BNB y XRP ya se usaron (H1, H2b, H3). ADA, LTC y LINK se reservaron el 2026-11-20 para H4.
+# Cuáles están usados se lleva en docs/RESULTADOS.md.
+simbolos_validacion = ["SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "LTCUSDT", "LINKUSDT"]
 intervalos_validacion = ["1h"]
 # Primera vela a descargar, en UTC.
 inicio = "2020-01-01"

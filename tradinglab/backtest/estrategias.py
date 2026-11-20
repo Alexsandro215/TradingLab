@@ -43,6 +43,8 @@ class Estrategia:
     validar: Callable[[dict[str, Any]], str | None] = field(default=lambda p: None, repr=False)
     # Columnas de factores externos que necesita (fase 6). Vacío = solo velas.
     factores: tuple[str, ...] = ()
+    # True si la posición objetivo puede ser parcial (entre 0 y 1) y no solo todo o nada.
+    fraccional: bool = False
 
     def completar(self, parametros: dict[str, Any] | None = None) -> dict[str, Any]:
         """Parámetros con valores por defecto, convertidos a su tipo y validados."""
@@ -82,6 +84,8 @@ class Estrategia:
                              "con cargar_serie(..., con_factores=True) y descarga los factores con "
                              "python -m tradinglab factores")
         senal = pd.Series(self.calcular(velas, completos), index=velas.index, dtype="float64")
+        if self.fraccional:
+            return senal.fillna(0).clip(0.0, 1.0).to_numpy()
         return senal.fillna(0).to_numpy().astype(np.int8)
 
     def rejilla(self) -> list[dict[str, Any]]:
@@ -146,6 +150,35 @@ def _momentum_apalancamiento(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
     sube = cierre > cierre.shift(p["ventana"])
     apalancado = v["funding_3d"] > p["umbral"]  # demasiados largos pagando por mantenerse
     return (sube & ~apalancado).astype(float)
+
+
+# Gestión de riesgo: la meta no es predecir, sino estar menos expuesto cuando el riesgo es alto.
+
+
+def _velas_por_anio(v: pd.DataFrame) -> float:
+    paso = float(np.median(np.diff(v["ts"].to_numpy()[:1000]))) if len(v) > 1 else 3_600_000.0
+    return 365 * 86_400_000 / paso
+
+
+def _peso_por_volatilidad(v: pd.DataFrame, ventana: int, vol_objetivo: float) -> pd.Series:
+    """Fracción invertida para que la volatilidad anual esperada sea `vol_objetivo` (máximo 100%)."""
+    rendimientos = np.log(v["cierre"]).diff()
+    vol_anual = rendimientos.rolling(ventana).std() * np.sqrt(_velas_por_anio(v))
+    return (vol_objetivo / vol_anual).clip(upper=1.0)
+
+
+def _tendencia_larga(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
+    cierre = v["cierre"]
+    return (cierre > cierre.rolling(p["ventana"]).mean()).astype(float)
+
+
+def _volatilidad_objetivo(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
+    return _peso_por_volatilidad(v, p["ventana"], p["vol_objetivo"])
+
+
+def _tendencia_volatilidad(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
+    en_tendencia = _tendencia_larga(v, {"ventana": p["ventana_tendencia"]})
+    return en_tendencia * _peso_por_volatilidad(v, p["ventana_vol"], p["vol_objetivo"])
 
 
 def _momentum_sentimiento(v: pd.DataFrame, p: dict[str, Any]) -> pd.Series:
@@ -230,6 +263,42 @@ ESTRATEGIAS: dict[str, Estrategia] = {
             ),
             calcular=_momentum_sentimiento,
             factores=("miedo_codicia",),
+        ),
+        Estrategia(
+            nombre="tendencia_larga",
+            titulo="Tendencia larga",
+            descripcion=(
+                "Comprar y mantener, pero fuera del mercado cuando el cierre está abajo de su promedio "
+                "de muchas velas (en 1h, 1200 = 50 días; 4800 = 200 días). Busca esquivar los mercados bajistas."
+            ),
+            parametros=(Parametro("ventana", int, 4800, "velas del promedio", (1200, 2400, 4800)),),
+            calcular=_tendencia_larga,
+        ),
+        Estrategia(
+            nombre="volatilidad_objetivo",
+            titulo="Volatilidad objetivo",
+            descripcion=(
+                "Comprar y mantener con una fracción del capital que baja cuando la volatilidad sube, "
+                "para apuntar a una volatilidad anual fija (nunca más del 100% invertido)."
+            ),
+            parametros=(
+                Parametro("ventana", int, 720, "velas para medir la volatilidad", (168, 720)),
+                Parametro("vol_objetivo", float, 0.6, "volatilidad anual buscada (0.6 = 60%)", (0.4, 0.6, 0.8)),
+            ),
+            calcular=_volatilidad_objetivo,
+            fraccional=True,
+        ),
+        Estrategia(
+            nombre="tendencia_volatilidad",
+            titulo="Tendencia larga con volatilidad objetivo",
+            descripcion="Fuera en mercados bajistas (tendencia larga) y, dentro, con volatilidad objetivo.",
+            parametros=(
+                Parametro("ventana_tendencia", int, 4800, "velas del promedio", (2400, 4800)),
+                Parametro("ventana_vol", int, 720, "velas para medir la volatilidad", (720,)),
+                Parametro("vol_objetivo", float, 0.6, "volatilidad anual buscada", (0.4, 0.6, 0.8)),
+            ),
+            calcular=_tendencia_volatilidad,
+            fraccional=True,
         ),
     )
 }

@@ -27,7 +27,7 @@ import numpy as np
 from tradinglab.backtest.costos import Costos
 from tradinglab.backtest.datos import cargar_serie
 from tradinglab.backtest.estrategias import obtener, texto_parametros
-from tradinglab.backtest.motor import Metricas, comprar_y_mantener, simular
+from tradinglab.backtest.motor import Metricas, anualizar, comprar_y_mantener, razon_calmar, simular
 from tradinglab.validacion.registro import fila_corrida
 from tradinglab.validacion.ventanas import DIA_MS, pliegues_walk_forward
 
@@ -166,6 +166,8 @@ def correr_walk_forward(
 
     rendimiento = acumulado / capital - 1
     dias_oos = (hasta_oos - desde_oos) / DIA_MS
+    anual = anualizar(rendimiento, dias_oos)
+    bh_anual = anualizar(bh_total.metricas.rendimiento, dias_oos)
     resumen = {
         "simbolo": simbolo,
         "intervalo": intervalo,
@@ -193,5 +195,10 @@ def correr_walk_forward(
         "mensual_entrenamiento_promedio": float(np.mean([p["mensual_entrenamiento"] for p in pliegues])),
         "mensual_prueba_promedio": float(np.mean([p["mensual_prueba"] for p in pliegues])),
         "cambios_de_parametros": cambios,
+        # Riesgo: rendimiento anual y Calmar (anual / |drawdown|) contra comprar y mantener.
+        "rendimiento_anual": anual,
+        "bh_rendimiento_anual": bh_anual,
+        "calmar": razon_calmar(anual, float(drawdown.min())),
+        "bh_calmar": razon_calmar(bh_anual, bh_total.metricas.drawdown_maximo),
     }
     return ResultadoWalkForward(resumen, pliegues, corridas, ts, curva, capital_bh)

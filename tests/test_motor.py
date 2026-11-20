@@ -186,3 +186,88 @@ def test_estrategia_con_factores_exige_sus_columnas():
     serie.velas["funding_3d"] = np.nan  # sin datos del factor: igual que momentum
     igual = estrategias.obtener("momentum").objetivo(serie.velas, {"ventana": 5})
     assert np.array_equal(e.objetivo(serie.velas, {"ventana": 5, "umbral": 0.0003}), igual)
+
+
+# --- Posiciones parciales y métricas de riesgo ---------------------------------------------------
+
+from tradinglab.backtest.motor import anualizar  # noqa: E402
+
+
+def test_fraccional_con_todo_invertido_es_igual_que_todo_o_nada():
+    serie = caminata(400, semilla=5)
+    costos = Costos(0.001, 0.0005)
+    binario = comprar_y_mantener(serie, 10, 390, costos)
+    unos = np.ones(len(serie))
+    parcial = simular(serie, unos, 10, 390, costos, objetivo_previo=1.0, fraccional=True)
+    assert parcial.capital == pytest.approx(binario.capital)
+    assert parcial.metricas.comisiones == pytest.approx(binario.metricas.comisiones)
+    assert parcial.metricas.operaciones == binario.metricas.operaciones == 1
+
+
+def test_fraccional_cuentas_a_mano():
+    serie = serie_backtest([100, 100, 100, 200, 200], [100, 100, 100, 200, 200])
+    # Mitad invertida desde la vela 1; la señal de bajar a 20% sale al cierre de la vela 3.
+    objetivo = np.array([0.5, 0.5, 0.5, 0.2, 0.2])
+    r = simular(serie, objetivo, costos=Costos(0.001, 0.0))
+    cantidad = 500 * 0.999 / 100  # compra en la apertura de la vela 1 con la mitad del capital
+    assert r.ejecuciones[0].ts == T0 + UNA_HORA and r.ejecuciones[0].cantidad == pytest.approx(cantidad)
+    assert r.capital[1] == pytest.approx(500 + cantidad * 100)
+
+    # Vela 3: el precio se duplicó y lo invertido pasó de 50% a 67%; más de 10 puntos de
+    # diferencia, así que rebalancea de vuelta a 50%.
+    valor = 500 + cantidad * 200
+    vendida = (cantidad * 200 / valor - 0.5) * valor / 200
+    rebalanceo = r.ejecuciones[1]
+    assert (rebalanceo.lado, rebalanceo.ts) == ("venta", T0 + 3 * UNA_HORA)
+    assert rebalanceo.cantidad == pytest.approx(vendida)
+    op = r.operaciones[0]
+    assert op.invertido == pytest.approx(500 * vendida / cantidad)  # costo promedio de lo vendido
+    assert op.ganancia > 0
+
+    # Vela 4: baja a 20%. Al final se vende el resto.
+    assert [(e.lado, e.motivo) for e in r.ejecuciones[2:]] == [("venta", "señal"), ("venta", "fin de ventana")]
+    assert r.ejecuciones[2].ts == T0 + 4 * UNA_HORA
+    assert r.metricas.operaciones == 3
+
+
+def test_banda_evita_ajustes_chicos():
+    serie = caminata(200, semilla=2)
+    pequenos = np.where(np.arange(200) % 2 == 0, 0.50, 0.55)  # oscila 5 puntos: no rebalancea
+    r = simular(serie, pequenos, costos=Costos(0.001, 0.0))
+    assert [e.lado for e in r.ejecuciones] == ["compra", "venta"]  # entrar y la venta final
+    grandes = np.where(np.arange(200) < 100, 0.5, 0.8)  # sube 30 puntos: sí rebalancea
+    r = simular(serie, grandes, costos=Costos(0.001, 0.0))
+    assert [e.lado for e in r.ejecuciones] == ["compra", "compra", "venta"]
+    assert r.metricas.exposicion == pytest.approx(0.65, abs=0.05)  # promedio de lo invertido
+
+
+def test_salir_del_todo_siempre_se_ejecuta():
+    serie = caminata(50, semilla=4)
+    objetivo = np.where(np.arange(50) < 20, 0.05, 0.0)  # 5%: menos que la banda, pero salir es salir
+    objetivo[:10] = 0.5
+    r = simular(serie, objetivo, costos=Costos(0.001, 0.0))
+    assert [e.lado for e in r.ejecuciones] == ["compra", "venta", "venta"]
+    assert r.ejecuciones[-1].motivo == "señal"
+
+
+def test_rendimiento_anual_y_calmar():
+    assert anualizar(1.0, 730) == pytest.approx(2**0.5 - 1)
+    assert anualizar(-1.0, 100) == -1
+    serie = serie_backtest([100] * 48, [100 + i for i in range(48)])  # 2 días de velas de 1h
+    r = comprar_y_mantener(serie, costos=Costos(0, 0))
+    assert r.metricas.rendimiento_anual == pytest.approx(anualizar(r.metricas.rendimiento, 2.0))
+    assert r.metricas.calmar is None or r.metricas.calmar > 0
+
+
+def test_estrategias_de_riesgo():
+    serie = caminata(3000, semilla=8)
+    vol = estrategias.obtener("volatilidad_objetivo")
+    pesos = vol.objetivo(serie.velas, {"ventana": 168, "vol_objetivo": 0.2})
+    assert pesos.dtype == np.float64 and 0 <= pesos.min() and pesos.max() <= 1
+    # Caminata con 1% por hora ~ 94% anual: con objetivo de 20% invierte cerca de una quinta parte.
+    assert np.nanmedian(pesos[200:]) == pytest.approx(0.2 / (0.01 * np.sqrt(8760)), rel=0.15)
+    tendencia = estrategias.obtener("tendencia_larga").objetivo(serie.velas, {"ventana": 100})
+    assert set(np.unique(tendencia)) <= {0, 1}
+    combinada = estrategias.obtener("tendencia_volatilidad").objetivo(
+        serie.velas, {"ventana_tendencia": 100, "ventana_vol": 168, "vol_objetivo": 0.2})
+    assert np.all(combinada[tendencia == 0] == 0)  # fuera de tendencia, nada invertido

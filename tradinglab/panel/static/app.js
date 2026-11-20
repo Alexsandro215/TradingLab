@@ -220,6 +220,8 @@ function dibujarBacktest(d) {
     ["Costo del deslizamiento (USDT)", (x) => usd(x.costo_deslizamiento)],
     ["Operaciones ganadoras", (x) => pct(x.ganadoras, false)],
     ["Tiempo dentro del mercado", (x) => pct(x.exposicion, false)],
+    ["Rendimiento anual", (x) => pct(x.rendimiento_anual), true],
+    ["Calmar (anual / caída)", (x) => (x.calmar === null || x.calmar === undefined ? "-" : x.calmar.toFixed(2))],
   ].map(([nombre, f, color]) => `<tr><td>${nombre}</td>` + [m, bh, nada].map((x) => `<td class="${color ? clase(x.rendimiento) : ""}">${f(x)}</td>`).join("") + "</tr>");
   $("metricas").innerHTML = tabla(["", "Estrategia", "Comprar y mantener", "No operar"], filas);
   $("texto-costos").textContent = `comisión ${(d.costos.comision * 100).toFixed(2)}% y deslizamiento ${(d.costos.deslizamiento * 100).toFixed(2)}% por lado`;
@@ -381,10 +383,13 @@ async function verEstudio(id) {
       tarjeta(rs.filter((r) => r.le_gana_a_comprar_y_mantener).length, "le ganan a comprar y mantener") +
       tarjeta(ganan, "le ganan a las dos") + tarjeta(entero(e.combinaciones), "simulaciones corridas") + "</div>";
     html += "<h2>Resultado fuera de muestra <small>pruebas encadenadas</small></h2><div class='desplazable'><table class='tabla'>" +
-      tabla(["Serie", "Estrategia", "Rendimiento", "Drawdown", "Ops", "Comprar y mantener", "Mensual entren. → prueba", "¿Gana a no operar?", "¿Gana a C&M?"],
+      tabla(["Serie", "Estrategia", "Rendimiento", "Drawdown", "Ops", "Comprar y mantener", "C&M drawdown", "Calmar", "C&M calmar",
+        "Mensual entren. → prueba", "¿Gana a no operar?", "¿Gana a C&M?"],
         rs.map((r) => `<tr><td>${esc(r.simbolo)} ${esc(r.intervalo)}</td><td class="izq">${esc(r.estrategia)}</td>` +
           `<td class="${clase(r.rendimiento)}">${pct(r.rendimiento)}</td><td>${pct(r.drawdown_maximo)}</td><td>${entero(r.operaciones)}</td>` +
-          `<td class="${clase(r.bh_rendimiento)}">${pct(r.bh_rendimiento)}</td>` +
+          `<td class="${clase(r.bh_rendimiento)}">${pct(r.bh_rendimiento)}</td><td>${pct(r.bh_drawdown)}</td>` +
+          `<td>${r.calmar === undefined || r.calmar === null ? "-" : r.calmar.toFixed(2)}</td>` +
+          `<td>${r.bh_calmar === undefined || r.bh_calmar === null ? "-" : r.bh_calmar.toFixed(2)}</td>` +
           `<td>${pct(r.mensual_entrenamiento_promedio)} → ${pct(r.mensual_prueba_promedio)}</td>` +
           `<td>${siNo(r.le_gana_a_no_operar)}</td><td>${siNo(r.le_gana_a_comprar_y_mantener)}</td></tr>`)) + "</table></div>";
     html += "<h2>Cada periodo de prueba <small>con la combinación elegida en su entrenamiento. Clic para verlo</small></h2>" +

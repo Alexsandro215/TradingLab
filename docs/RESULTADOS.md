@@ -5,6 +5,60 @@ muestra completos; el panel también). Lo más reciente va arriba.
 
 ---
 
+## 2026-11-20: Nueva meta, gestión de riesgo. Hipótesis H4
+
+Como nada le gana a comprar y mantener en rendimiento, el usuario aceptó cambiar la meta:
+**algo parecido a comprar y mantener, pero con caídas mucho menores**. Para eso, el motor ahora
+admite posiciones parciales (con banda de rebalanceo de 10 puntos) y reporta el rendimiento
+anual y la razón **Calmar = rendimiento anual / |drawdown máximo|**.
+
+### Exploración (estudio #19)
+
+Walk-forward de 12/3 meses, criterio `calmar`, en los 6 pares ya usados (BTC, ETH, ZEC, SOL, BNB y
+XRP, 1h). Fuera de muestra, de 2021 a hoy:
+
+| Estrategia | Mejor Calmar que C&M | Drawdown ≥ 1/3 menor que C&M |
+|---|---|---|
+| `tendencia_larga` (fuera si el precio está bajo su promedio largo) | 3 de 6 | 0 de 6 |
+| `volatilidad_objetivo` (menos invertido con volatilidad alta) | 2 de 6 | 0 de 6 |
+| **`tendencia_volatilidad`** (las dos juntas) | **4 de 6** | **2 de 6** (BTC −49% contra −77%; ETH −40% contra −81%); BNB y SOL quedaron justo al borde |
+
+La volatilidad objetivo sola casi no reduce caídas: la volatilidad de las criptos suele estar
+cerca del objetivo, así que casi siempre está invertida al 90%. Las grandes caídas de 2022 fueron
+lentas, no bruscas, y las esquiva mejor el filtro de tendencia.
+
+### H4, registrada ANTES de mirar ADA, LTC y LINK
+
+Pares reservados el 2026-11-20 y nunca usados: ADAUSDT, LTCUSDT y LINKUSDT. Sus velas de 1h se
+descargaron, pero no se ha corrido nada con ellas.
+
+- Procedimiento fijo: `tendencia_volatilidad` con su rejilla, walk-forward de 12 meses de
+  entrenamiento y 3 de prueba, criterio `calmar`, intervalo 1h, costos de `config.toml`.
+- **Se acepta si, en al menos 2 de los 3 pares, fuera de muestra:**
+  1. su Calmar es mayor que el de comprar y mantener, **y**
+  2. su drawdown máximo es al menos un tercio menor que el de comprar y mantener.
+
+### Resultado de H4 (estudio #20): RECHAZADA
+
+| Par | Rend. anual (estr. / C&M) | Drawdown (estr. / C&M) | Calmar (estr. / C&M) | ¿Cumple? |
+|---|---|---|---|---|
+| ADAUSDT | +16.7% / −4.3% | −58% / −96% | 0.29 / −0.05 | **sí** |
+| LTCUSDT | −9.6% / −17.4% | −73% / −90% | −0.13 / −0.19 | no: la caída no es un tercio menor |
+| LINKUSDT | −9.4% / −4.9% | −83% / −91% | −0.11 / −0.05 | no |
+
+Cumple en 1 de 3 y pedía 2. **Se rechaza** tal como se registró.
+
+**Observación que NO era el criterio registrado**, así que es una pista y no evidencia: en los
+**9 pares** (los 6 de la exploración y los 3 reservados), `tendencia_volatilidad` tuvo una caída
+máxima menor que comprar y mantener. La razón entre las dos caídas fue de 0.49 a 0.94, unos 27%
+menos en promedio. En rendimiento anual le fue mejor o parecido en 6 de 9. La dirección es
+consistente, pero las caídas siguen siendo grandes (40% a 83%) y las criptos se mueven juntas,
+así que los 9 pares no son 9 pruebas independientes.
+
+Pares reservados usados: ADA, LTC y LINK quedan gastados con H4.
+
+---
+
 ## 2026-11-20: Fase 6. Estudio de eventos completo (estudio #18)
 
 ¿Algún factor avisa ANTES de las caídas fuertes? Se probaron BTC, ETH y ZEC en 1h. "Caída" es el

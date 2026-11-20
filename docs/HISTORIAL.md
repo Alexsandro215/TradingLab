@@ -6,6 +6,48 @@ hizo* y *Pendiente*.
 
 ---
 
+## 2026-11-20: Nueva meta, gestión de riesgo (posiciones parciales y H4)
+
+### Decisiones
+
+- El usuario aceptó cambiar la meta: en vez de ganarle en rendimiento a comprar y mantener,
+  buscar algo parecido pero **con caídas mucho menores**. La medida principal es Calmar
+  (rendimiento anual / |drawdown|).
+- El motor admite **posiciones parciales**, con banda de rebalanceo de 10 puntos, como un camino
+  aparte. El de todo o nada no se tocó, porque es el que se verificó contra la operación en papel.
+- ADA, LTC y LINK se reservaron como pares de validación ANTES de explorar.
+
+### Lo que se hizo
+
+- Motor de posiciones parciales, rendimiento anual y Calmar en las métricas, en el backtest, en
+  el walk-forward y en el panel.
+- Tres estrategias de riesgo: `tendencia_larga`, `volatilidad_objetivo` y `tendencia_volatilidad`.
+- 93 pruebas, todas pasan. Entre ellas: con todo invertido, el motor de posiciones parciales da
+  exactamente lo mismo que el de todo o nada, y hay cuentas a mano de un rebalanceo.
+- Exploración en los 6 pares ya usados (estudio #19): la mejor es `tendencia_volatilidad`.
+- H4 registrada y probada en ADA, LTC y LINK (estudio #20): **rechazada** (1 de 3).
+
+### Hallazgos
+
+- Ninguna regla simple logra, de forma confiable, caídas un tercio menores que comprar y
+  mantener sin perder la relación rendimiento/riesgo.
+- Pista, no evidencia: `tendencia_volatilidad` tuvo menos caída que comprar y mantener en los 9
+  pares (27% menos en promedio), pero las caídas siguen siendo de 40% a 83%.
+- La volatilidad objetivo sola casi no ayuda: las grandes caídas de 2022 fueron lentas.
+
+### Pendiente
+
+- Ya no quedan pares reservados limpios. Para otra hipótesis, reservar nuevos antes de explorar.
+- Ideas, si se sigue por la línea de riesgo:
+  - intervalo diario (menos ruido y menos operaciones);
+  - salida más rápida en tendencia bajista;
+  - medir con Calmar en los pares de siempre la combinación de tendencia larga con fracción fija
+    (por ejemplo 50%).
+- Noticias hacia adelante (recolector de titulares), si el usuario quiere.
+- Decidir qué hacer con la sesión de papel de ETH.
+
+---
+
 ## 2026-11-20: Fase 6 (factores externos), validación de la pista de ETH y sesión de papel
 
 ### Decisiones

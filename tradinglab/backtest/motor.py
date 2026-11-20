@@ -13,6 +13,11 @@ Reglas de la simulación (ver los principios en CLAUDE.md):
 - Al final de la ventana se cierra la posición al cierre de la última vela, pagando costos,
   para que el resultado sea comparable con comprar y mantener.
 - El capital se valúa al cierre de cada vela; el drawdown se mide sobre esa curva.
+
+Posiciones parciales (estrategias de gestión de riesgo): si el objetivo trae valores entre 0 y 1,
+es la fracción del capital que se quiere tener invertida. Para no pagar comisiones por ajustes
+mínimos, solo se rebalancea cuando la diferencia con la fracción actual pasa de `banda`
+(10 puntos por defecto). Salir del todo (objetivo 0) siempre se ejecuta.
 """
 
 from __future__ import annotations
@@ -25,6 +30,11 @@ import numpy as np
 from tradinglab.backtest.costos import Costos, comprar, vender
 from tradinglab.backtest.datos import Serie
 from tradinglab.backtest.estrategias import Estrategia
+from tradinglab.tiempo import duracion_ms
+
+DIA_MS = 86_400_000
+# Diferencia mínima entre la fracción invertida y la deseada para rebalancear.
+BANDA_REBALANCEO = 0.10
 
 
 @dataclass(frozen=True)
@@ -71,7 +81,9 @@ class Metricas:
     comisiones: float  # USDT
     costo_deslizamiento: float  # USDT
     ganadoras: float | None  # fracción de operaciones con ganancia; None si no hubo
-    exposicion: float  # fracción de velas con posición abierta
+    exposicion: float  # fracción promedio del capital invertida (todo o nada: fracción del tiempo dentro)
+    rendimiento_anual: float = 0.0  # rendimiento compuesto por año
+    calmar: float | None = None  # rendimiento anual / |drawdown máximo|; None si no hubo caída
 
     def como_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -92,6 +104,21 @@ def no_operar(capital_inicial: float) -> Metricas:
     return Metricas(capital_inicial, capital_inicial, 0.0, 0.0, 0, 0.0, 0.0, None, 0.0)
 
 
+def anualizar(rendimiento: float, dias: float) -> float:
+    """Rendimiento compuesto por año de un rendimiento logrado en `dias`."""
+    if rendimiento <= -1 or dias <= 0:
+        return -1.0
+    return (1 + rendimiento) ** (365.0 / dias) - 1
+
+
+def razon_calmar(rendimiento_anual: float, drawdown_maximo: float) -> float | None:
+    return rendimiento_anual / -drawdown_maximo if drawdown_maximo < 0 else None
+
+
+def _dias(serie: Serie, inicio: int, fin: int) -> float:
+    return (int(serie.ts[fin - 1]) + duracion_ms(serie.intervalo) - int(serie.ts[inicio])) / DIA_MS
+
+
 def simular(
     serie: Serie,
     objetivo: np.ndarray,
@@ -100,9 +127,14 @@ def simular(
     costos: Costos = Costos(),
     capital_inicial: float = 1000.0,
     fraccion: float = 1.0,
-    objetivo_previo: int | None = None,
+    objetivo_previo: float | None = None,
+    banda: float = BANDA_REBALANCEO,
+    fraccional: bool | None = None,
 ) -> Resultado:
     """Simula la estrategia en las velas [inicio, fin) de la serie.
+
+    Si el objetivo solo tiene 0 y 1 se usa la simulación de todo o nada; si tiene valores
+    intermedios, la de posiciones parciales (`fraccional` lo fuerza en un sentido u otro).
 
     `objetivo` tiene una posición objetivo (0 o 1) por cada vela de TODA la serie. La que se
     ejecuta en la apertura de la vela `inicio` es objetivo[inicio - 1]: viene de una vela
@@ -116,6 +148,13 @@ def simular(
         raise ValueError("objetivo debe tener una posición por vela de la serie")
     if not 0 < fraccion <= 1:
         raise ValueError("fraccion debe estar entre 0 (excluido) y 1")
+
+    if fraccional is None:
+        valores = np.asarray(objetivo, dtype=np.float64)
+        fraccional = bool(np.any((valores != 0) & (valores != 1)))
+    if fraccional:
+        return _simular_fraccional(serie, np.asarray(objetivo, dtype=np.float64), inicio, fin, costos,
+                                   capital_inicial, fraccion, objetivo_previo, banda)
 
     m = fin - inicio
     if objetivo_previo is None:
@@ -202,6 +241,7 @@ def simular(
 
     drawdown = capital / np.maximum.accumulate(capital) - 1
     ganadoras = sum(op.ganancia > 0 for op in operaciones) / len(operaciones) if operaciones else None
+    anual = anualizar(float(capital[-1] / capital_inicial - 1), _dias(serie, inicio, fin))
     metricas = Metricas(
         capital_inicial=float(capital_inicial),
         capital_final=float(capital[-1]),
@@ -212,6 +252,102 @@ def simular(
         costo_deslizamiento=float(sum(e.costo_deslizamiento for e in ejecuciones)),
         ganadoras=ganadoras,
         exposicion=float((cantidad_por_vela > 0).mean()),
+        rendimiento_anual=anual,
+        calmar=razon_calmar(anual, float(drawdown.min())),
+    )
+    return Resultado(serie.ts[inicio:fin].copy(), capital, drawdown, ejecuciones, operaciones, metricas)
+
+
+def _simular_fraccional(
+    serie: Serie,
+    objetivo: np.ndarray,
+    inicio: int,
+    fin: int,
+    costos: Costos,
+    capital_inicial: float,
+    fraccion: float,
+    objetivo_previo: float | None,
+    banda: float,
+) -> Resultado:
+    """Posiciones parciales: el objetivo es la fracción del capital que se quiere invertida.
+
+    Mismas reglas que el todo o nada: se decide con la vela cerrada, se ejecuta en la apertura de
+    la siguiente vela con operaciones, se pagan comisión y deslizamiento, y al final se vende
+    todo. Cada venta (total o parcial) cuenta como una operación, con ganancia contra el costo
+    promedio de lo vendido.
+    """
+    m = fin - inicio
+    previo = objetivo_previo if objetivo_previo is not None else (objetivo[inicio - 1] if inicio > 0 else 0.0)
+    deseado = np.empty(m)
+    deseado[0] = previo
+    deseado[1:] = objetivo[inicio: fin - 1]
+    deseado = np.clip(np.nan_to_num(deseado), 0.0, 1.0) * fraccion
+
+    apertura, cierre, operaciones_vela, ts = serie.apertura, serie.cierre, serie.operaciones, serie.ts
+    efectivo, cantidad, costo = float(capital_inicial), 0.0, 0.0  # costo: USDT pagados por lo que se tiene
+    abierta_desde: int | None = None
+    ejecuciones: list[Ejecucion] = []
+    operaciones: list[Operacion] = []
+    capital = np.empty(m)
+    peso_al_cierre = np.empty(m)
+
+    def vender_parte(q: float, precio_mercado: float, ts_vela: int, motivo: str) -> None:
+        nonlocal efectivo, cantidad, costo, abierta_desde
+        fill = vender(q, precio_mercado, costos)
+        costo_vendido = costo * q / cantidad
+        efectivo += fill.efectivo
+        ejecuciones.append(Ejecucion(ts_vela, "venta", precio_mercado, fill.precio, q, fill.comision,
+                                     fill.costo_deslizamiento, efectivo, motivo))
+        operaciones.append(Operacion(abierta_desde if abierta_desde is not None else ts_vela, ts_vela,
+                                     costo_vendido / q, fill.precio, q, costo_vendido, fill.efectivo))
+        cantidad -= q
+        costo -= costo_vendido
+        if cantidad <= 1e-12:
+            cantidad, costo, abierta_desde = 0.0, 0.0, None
+
+    for k in range(m):
+        j = inicio + k
+        if operaciones_vela[j] > 0:
+            precio = float(apertura[j])
+            valor = efectivo + cantidad * precio
+            peso = cantidad * precio / valor if valor > 0 else 0.0
+            meta = float(deseado[k])
+            if (meta == 0.0 and cantidad > 0) or abs(meta - peso) > banda:
+                if meta > peso:
+                    gasto = min((meta - peso) * valor, efectivo)
+                    fill = comprar(gasto, precio, costos)
+                    efectivo -= gasto
+                    cantidad += fill.cantidad
+                    costo += gasto
+                    if abierta_desde is None:
+                        abierta_desde = int(ts[j])
+                    ejecuciones.append(Ejecucion(int(ts[j]), "compra", precio, fill.precio, fill.cantidad,
+                                                 fill.comision, fill.costo_deslizamiento, efectivo, "señal"))
+                else:
+                    q = cantidad if meta == 0.0 else min(cantidad, (peso - meta) * valor / precio)
+                    vender_parte(q, precio, int(ts[j]), "señal")
+        capital[k] = efectivo + cantidad * float(cierre[j])
+        peso_al_cierre[k] = cantidad * float(cierre[j]) / capital[k] if capital[k] > 0 else 0.0
+
+    if cantidad > 0:  # cierre forzoso al final de la ventana
+        vender_parte(cantidad, float(cierre[fin - 1]), int(ts[fin - 1]), "fin de ventana")
+        capital[-1] = efectivo
+
+    drawdown = capital / np.maximum.accumulate(capital) - 1
+    rendimiento = float(capital[-1] / capital_inicial - 1)
+    anual = anualizar(rendimiento, _dias(serie, inicio, fin))
+    metricas = Metricas(
+        capital_inicial=float(capital_inicial),
+        capital_final=float(capital[-1]),
+        rendimiento=rendimiento,
+        drawdown_maximo=float(drawdown.min()),
+        operaciones=len(operaciones),
+        comisiones=float(sum(e.comision for e in ejecuciones)),
+        costo_deslizamiento=float(sum(e.costo_deslizamiento for e in ejecuciones)),
+        ganadoras=sum(op.ganancia > 0 for op in operaciones) / len(operaciones) if operaciones else None,
+        exposicion=float(peso_al_cierre.mean()),
+        rendimiento_anual=anual,
+        calmar=razon_calmar(anual, float(drawdown.min())),
     )
     return Resultado(serie.ts[inicio:fin].copy(), capital, drawdown, ejecuciones, operaciones, metricas)
 

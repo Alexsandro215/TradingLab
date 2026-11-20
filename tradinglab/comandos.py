@@ -182,6 +182,10 @@ def _si_no(valor: bool) -> str:
     return "SÍ" if valor else "no"
 
 
+def _num(valor: float | None) -> str:
+    return "-" if valor is None else f"{valor:.2f}"
+
+
 def comando_estrategias() -> int:
     for e in ESTRATEGIAS.values():
         print(f"\n{e.nombre}: {e.titulo}")
@@ -239,6 +243,8 @@ def comando_backtest(
             ("Costo del deslizamiento", usd(m.costo_deslizamiento), usd(bh.costo_deslizamiento), usd(0)),
             ("Operaciones ganadoras", pct(m.ganadoras, False), pct(bh.ganadoras, False), "-"),
             ("Tiempo dentro del mercado", pct(m.exposicion, False), pct(bh.exposicion, False), pct(0, False)),
+            ("Rendimiento anual", pct(m.rendimiento_anual), pct(bh.rendimiento_anual), pct(0)),
+            ("Calmar (anual / caída)", _num(m.calmar), _num(bh.calmar), "-"),
         ]
         print(tabla(("", "Estrategia", "Comprar y mantener", "No operar"), filas))
         print()
@@ -373,6 +379,18 @@ def imprimir_walk_forward(resumenes: list[dict], detalle: list[list[dict]] | Non
     ]
     print(tabla(("par", "int.", "estrategia", "rendimiento", "drawdown", "ops", "C&M", "C&M dd",
                  "mensual entren. -> prueba", "gana a no operar", "gana a C&M"), filas, 3))
+    if all("calmar" in r for r in resumenes):
+        print("\nRiesgo fuera de muestra. Calmar = rendimiento anual / |drawdown máximo|: más alto es mejor. "
+              "'Caída 1/3 menor' = drawdown al menos un tercio menor que el de C&M.")
+        filas = [
+            (r["simbolo"], r["intervalo"], r["estrategia"], pct(r["rendimiento_anual"]), pct(r["drawdown_maximo"]),
+             _num(r["calmar"]), pct(r["bh_rendimiento_anual"]), pct(r["bh_drawdown"]), _num(r["bh_calmar"]),
+             _si_no(r["drawdown_maximo"] >= r["bh_drawdown"] * 2 / 3),
+             _si_no((r["calmar"] or 0) > (r["bh_calmar"] or 0)))
+            for r in resumenes
+        ]
+        print(tabla(("par", "int.", "estrategia", "anual", "drawdown", "calmar", "C&M anual", "C&M dd",
+                     "C&M calmar", "caída 1/3 menor", "mejor calmar"), filas, 3))
     n = len(resumenes)
     a_nada = sum(r["le_gana_a_no_operar"] for r in resumenes)
     a_bh = sum(r["le_gana_a_comprar_y_mantener"] for r in resumenes)
