@@ -30,6 +30,8 @@ hizo* y *Pendiente*.
 - `verificar`: 0 velas inválidas en las 6 series; el cruce 5m contra 1h coincide en las
   60,331 horas comparables de cada par (14 horas incompletas por huecos no se comparan).
 - La ventana de VS Code se pintó de morado (ver la entrada del arranque).
+- Primer commit, `5b471e1`, con el arranque y la fase 1. El cambio a esta bitácora que lo
+  registra va en un segundo commit.
 
 ### Hallazgos
 
@@ -47,7 +49,6 @@ hizo* y *Pendiente*.
 
 ### Pendiente
 
-- Hacer el primer commit cuando el usuario lo indique.
 - Fase 2, motor de backtest:
   - deslizamiento por defecto, probablemente mayor para ZEC por su poca liquidez;
   - cómo tratar huecos y velas sin operaciones (no llenar órdenes donde no hubo precio real).
