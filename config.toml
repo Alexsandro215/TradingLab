@@ -1,0 +1,16 @@
+# Configuración de TradingLab.
+# Las rutas relativas se resuelven desde la carpeta de este archivo (la raíz del proyecto).
+
+[datos]
+ruta_base = "datos/tradinglab.sqlite"
+
+[recolector]
+# Pares de Binance spot, con el nombre que usa Binance (sin diagonal).
+simbolos = ["BTCUSDT", "ETHUSDT", "ZECUSDT"]
+intervalos = ["5m", "1h"]
+# Primera vela a descargar, en UTC.
+inicio = "2020-01-01"
+# API pública de Binance; la segunda es el respaldo (solo datos de mercado).
+urls = ["https://api.binance.com", "https://data-api.binance.vision"]
+# Pausa mínima entre peticiones, en segundos.
+pausa_entre_peticiones = 0.1

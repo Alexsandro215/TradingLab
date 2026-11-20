@@ -1,0 +1,48 @@
+# Entorno virtual
+.venv/
+venv/
+env/
+
+# Base SQLite y datos descargados
+datos/
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Herramientas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Registros
+*.log
+logs/
+
+# Secretos y configuración local
+.env
+.env.*
+.claude/settings.local.json
+
+# Preferencias locales del editor (color de la ventana, etc.)
+.vscode/
+
+# Sistema operativo
+Thumbs.db
+desktop.ini
+.DS_Store
