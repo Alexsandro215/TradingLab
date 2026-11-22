@@ -1,7 +1,6 @@
 # Evidencia
 
-Capturas reales del programa funcionando, tomadas el 22 de noviembre de 2026 con **datos de demostración**
-(nombres, cuentas y cifras inventadas). No contienen datos personales reales.
+Capturas reales del programa funcionando, tomadas el 22 de noviembre de 2026 con **datos públicos reales del mercado** (velas de Binance, sin claves) y capital ficticio: ninguna operación usó dinero real.
 
 ## 1. Backtest contra las dos referencias
 
